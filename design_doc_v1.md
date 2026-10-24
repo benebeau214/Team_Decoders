@@ -11,6 +11,7 @@ AI 오케스트레이션 스튜디오 · 제7주차 · 설계 문서 V1 (배점 
 | 저장소 | https://github.com/benebeau214/Team_Decoders |
 
 **목차**
+
 - [파트 1. 문제 정의서](#파트-1-문제-정의서-6요소)
 - [파트 2. 모듈 분해도](#파트-2-모듈-분해도)
 - [파트 3. Pseudocode / Flowchart](#파트-3-pseudocode--flowchart)
