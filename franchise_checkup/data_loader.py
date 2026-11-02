@@ -1,0 +1,180 @@
+import pandas as pd
+import math
+from pandas.errors import EmptyDataError, ParserError
+import csv
+import math
+
+def load_csv_table(filepath: str, required_cols: list[str]) -> pd.DataFrame:
+    """Load a comma- or semicolon-delimited CSV and validate required columns."""
+
+    # 수정 1: required_cols 자료형 검증
+    if not isinstance(required_cols, list) or not all(
+        isinstance(col, str) and col.strip() for col in required_cols
+    ):
+        raise ValueError("required_cols must be a list of non-empty strings")
+
+    # 수정 2: 지원 구분자 확인
+    try:
+        try:
+            with open(filepath, "r", encoding="utf-8", newline="") as f:
+                sample = f.read(4096)
+            encoding = "utf-8"
+        except UnicodeDecodeError:
+            with open(filepath, "r", encoding="cp949", newline="") as f:
+                sample = f.read(4096)
+            encoding = "cp949"
+
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;")
+            delimiter = dialect.delimiter
+        except csv.Error:
+            # 단일 열 CSV도 허용
+            delimiter = ","
+
+        data = pd.read_csv(
+            filepath,
+            encoding=encoding,
+            sep=delimiter,
+        )
+
+    except EmptyDataError as error:
+        raise ValueError(
+            f"CSV file has no header row: {filepath}"
+        ) from error
+    except ParserError as error:
+        raise ValueError(
+            f"CSV file could not be parsed: {filepath}"
+        ) from error
+    except UnicodeDecodeError as error:
+        raise ValueError(
+            f"CSV file could not be decoded as UTF-8 or CP949: {filepath}"
+        ) from error
+
+    missing_cols = [
+        col for col in required_cols
+        if col not in data.columns
+    ]
+
+    if missing_cols:
+        raise ValueError(
+            f"Missing required columns: {', '.join(missing_cols)}"
+        )
+
+    return data
+
+
+def validate_user_input(raw: dict) -> dict:
+    """Validate and normalize franchise financial health-check user input."""
+    required_keys = (
+        "brand",
+        "region",
+        "deposit",
+        "key_money",
+        "loan_amount",
+        "loan_rate",
+        "user_type",
+    )
+
+    if not isinstance(raw, dict):
+        raise ValueError("raw must be a dict")
+
+    missing_keys = [key for key in required_keys if key not in raw]
+    if missing_keys:
+        raise ValueError(f"Missing required keys: {', '.join(missing_keys)}")
+
+    normalized_brand = raw["brand"]
+    normalized_region = raw["region"]
+    if not isinstance(normalized_brand, str) or not normalized_brand.strip():
+        raise ValueError("brand must be a non-empty string")
+    if not isinstance(normalized_region, str) or not normalized_region.strip():
+        raise ValueError("region must be a non-empty string")
+
+    normalized_values = {}
+    for key in ("deposit", "key_money", "loan_amount", "loan_rate"):
+        value = raw[key]
+        if isinstance(value, bool):
+            raise ValueError(f"{key} must be a finite number")
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{key} must be a finite number") from error
+        if not math.isfinite(numeric_value):
+            raise ValueError(f"{key} must be a finite number")
+        normalized_values[key] = numeric_value
+
+    for key in ("deposit", "key_money", "loan_amount"):
+        if normalized_values[key] < 0:
+            raise ValueError(f"{key} must be at least 0")
+    if not 0 <= normalized_values["loan_rate"] <= 100:
+        raise ValueError("loan_rate must be between 0 and 100")
+
+    # 수정 1: 사용자 유형 자료형 검증
+    if not isinstance(raw["user_type"], str):
+        raise ValueError("user_type must be a string")
+
+    # 수정 2: 사용자 유형의 앞뒤 공백 제거
+    normalized_user_type = raw["user_type"].strip()
+
+    if normalized_user_type not in ("예비", "기존"):
+        raise ValueError("user_type must be '예비' or '기존'")
+
+    return {
+        "brand": normalized_brand.strip(),
+        "region": normalized_region.strip(),
+        **normalized_values,
+        "user_type": normalized_user_type,
+    }
+
+
+def select_avg_sales(
+    disc_row: dict,
+    region_rows: pd.DataFrame,
+    region: str
+) -> dict:
+    """Select a valid regional average sale or fall back to the national value."""
+    if not isinstance(region, str) or not region.strip():
+        raise ValueError("region must be a non-empty string")
+    if not isinstance(disc_row, dict):
+        raise ValueError("disc_row must be a dict")
+    if not isinstance(region_rows, pd.DataFrame):
+        raise ValueError("region_rows must be a pandas DataFrame")
+    if not {"region", "avg_annual_sales"}.issubset(region_rows.columns):
+        raise ValueError(
+            "region_rows must contain region and avg_annual_sales columns"
+        )
+
+    # 수정 1: 지역명 앞뒤 공백 제거
+    region = region.strip()
+
+    matching_rows = region_rows.loc[region_rows["region"] == region]
+    if len(matching_rows) > 1:
+        raise ValueError(f"Duplicate regional data found for region: {region}")
+
+    if len(matching_rows) == 1:
+        regional_value = matching_rows.iloc[0]["avg_annual_sales"]
+        if not isinstance(regional_value, bool):
+            try:
+                regional_value = float(regional_value)
+            except (TypeError, ValueError):
+                regional_value = None
+            if regional_value is not None and math.isfinite(regional_value):
+                if regional_value > 0:
+                    return {"value": regional_value, "basis": region}
+
+    # 수정 2: 전국 평균매출이 실제로 필요할 때 검증
+    if "avg_annual_sales" not in disc_row:
+        raise ValueError("disc_row must contain avg_annual_sales")
+
+    national_value = disc_row["avg_annual_sales"]
+    if isinstance(national_value, bool):
+        raise ValueError("National average sales must be a positive finite number")
+    try:
+        national_value = float(national_value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            "National average sales must be a positive finite number"
+        ) from error
+    if not math.isfinite(national_value) or national_value <= 0:
+        raise ValueError("National average sales must be a positive finite number")
+
+    return {"value": national_value, "basis": "전국"}
