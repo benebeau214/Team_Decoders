@@ -2,6 +2,7 @@ import pandas as pd
 import math
 from pandas.errors import EmptyDataError, ParserError
 import csv
+import math
 
 def load_csv_table(filepath: str, required_cols: list[str]) -> pd.DataFrame:
     """Load a comma- or semicolon-delimited CSV and validate required columns."""
@@ -107,14 +108,21 @@ def validate_user_input(raw: dict) -> dict:
     if not 0 <= normalized_values["loan_rate"] <= 100:
         raise ValueError("loan_rate must be between 0 and 100")
 
-    if raw["user_type"] not in ("예비", "기존"):
+    # 수정 1: 사용자 유형 자료형 검증
+    if not isinstance(raw["user_type"], str):
+        raise ValueError("user_type must be a string")
+
+    # 수정 2: 사용자 유형의 앞뒤 공백 제거
+    normalized_user_type = raw["user_type"].strip()
+
+    if normalized_user_type not in ("예비", "기존"):
         raise ValueError("user_type must be '예비' or '기존'")
 
     return {
         "brand": normalized_brand.strip(),
         "region": normalized_region.strip(),
         **normalized_values,
-        "user_type": raw["user_type"],
+        "user_type": normalized_user_type,
     }
 
 
