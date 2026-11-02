@@ -127,31 +127,31 @@ def test_ratios_not_dict_raises():
 # ---------------------------------------------------------------
 # calc_termination_rate
 # ---------------------------------------------------------------
-COMPOSE = {"stores_begin": 2370, "contract_terminated": 27, "contract_ended": 5}  # 공정위 2025 컴포즈커피
+DISC = {"stores_begin": 1000, "contract_terminated": 30, "contract_ended": 20}  # 가상 값
 
 
 def test_rate_normal():
     """정상: (해지 + 종료) / 연초 가맹점 수 × 100, 반올림 없음."""
-    assert calc_termination_rate(COMPOSE) == pytest.approx(32 / 2370 * 100)
+    assert calc_termination_rate(DISC) == pytest.approx(5.0)
 
 
 def test_rate_boundary_zero_stores():
     """경계: 연초 가맹점 수 0이면 None (ZeroDivisionError 없음)."""
-    assert calc_termination_rate({**COMPOSE, "stores_begin": 0}) is None
+    assert calc_termination_rate({**DISC, "stores_begin": 0}) is None
 
 
 def test_rate_missing_or_negative_is_none():
     """예외: 값 없음(None·NaN·키 없음)·음수 건수 → None, 예외 없음."""
-    assert calc_termination_rate({**COMPOSE, "contract_ended": None}) is None
-    assert calc_termination_rate({**COMPOSE, "stores_begin": float("nan")}) is None
-    assert calc_termination_rate({"stores_begin": 2370}) is None
-    assert calc_termination_rate({**COMPOSE, "contract_terminated": -1}) is None
+    assert calc_termination_rate({**DISC, "contract_ended": None}) is None
+    assert calc_termination_rate({**DISC, "stores_begin": float("nan")}) is None
+    assert calc_termination_rate({"stores_begin": 1000}) is None
+    assert calc_termination_rate({**DISC, "contract_terminated": -1}) is None
 
 
 def test_rate_not_dict_raises():
     """예외: disc_row가 dict가 아니면 ValueError."""
     with pytest.raises(ValueError):
-        calc_termination_rate("2370")
+        calc_termination_rate("1000")
 
 
 # ---------------------------------------------------------------
@@ -160,14 +160,14 @@ def test_rate_not_dict_raises():
 def test_full_impairment_flows_to_judge():
     """연결: 완전잠식 본사는 부채비율 '확인 필요', 자본잠식 '위험' (부채비율이 '정상'으로 나오면 안 됨)."""
     ratios = calc_financial_ratios({**FIN, "total_equity": -50.0})
-    result = judge_risk_signals(ratios, calc_termination_rate(COMPOSE), THRESHOLDS)
+    result = judge_risk_signals(ratios, calc_termination_rate(DISC), THRESHOLDS)
     assert levels(result) == ["확인 필요", "위험", "주의", "정상"]
 
 
 def test_regression_non_numeric_is_none():
     """회귀(결함): 숫자가 아닌 값(쉼표 문자열 등)은 예외 없이 None/'NA'로 처리."""
     # calc_termination_rate: 연초 가맹점 수가 쉼표 문자열
-    assert calc_termination_rate({**COMPOSE, "stores_begin": "2,370"}) is None
+    assert calc_termination_rate({**DISC, "stores_begin": "1,000"}) is None
 
     # calc_financial_ratios: 부채총계만 문자열, 나머지는 FIN 그대로
     result = calc_financial_ratios({**FIN, "total_liabilities": "150"})

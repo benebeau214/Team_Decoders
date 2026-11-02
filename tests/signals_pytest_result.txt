@@ -23,4 +23,4 @@ tests/test_signals.py::test_rate_not_dict_raises PASSED                  [ 88%]
 tests/test_signals.py::test_full_impairment_flows_to_judge PASSED        [ 94%]
 tests/test_signals.py::test_regression_non_numeric_is_none PASSED        [100%]
 
-============================= 18 passed in 0.07s ==============================
+============================= 18 passed in 0.05s ==============================
