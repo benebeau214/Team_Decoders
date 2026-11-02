@@ -69,13 +69,16 @@ quote는 아래 원문에 실제로 존재하는 부분을 글자 그대로 인�
         return {"status": "parse_error", "items": [], "dropped": 0}
 
     items = []
+    # dropped는 원문에 없는 인용으로 제외한 항목 수만 센다.
     dropped = 0
     for candidate in parsed_response["items"]:
+        # 항목 형식 오류는 전체 실패로 처리하며, 앞서 모은 항목과 제외 건수도 반환하지 않는다.
         if not isinstance(candidate, dict):
             return {"status": "parse_error", "items": [], "dropped": 0}
 
         quote = candidate.get("quote")
         reason = candidate.get("reason")
+        # quote 또는 reason의 타입·빈 값 오류도 전체 parse_error로 처리한다.
         if (
             not isinstance(quote, str)
             or not quote.strip()
@@ -84,6 +87,7 @@ quote는 아래 원문에 실제로 존재하는 부분을 글자 그대로 인�
         ):
             return {"status": "parse_error", "items": [], "dropped": 0}
 
+        # 형식은 유효하지만 인용이 원문에 없으면 해당 항목만 제외한다.
         if quote not in clause_text:
             dropped += 1
             continue
@@ -100,6 +104,7 @@ quote는 아래 원문에 실제로 존재하는 부분을 글자 그대로 인�
             }
         )
 
+    # 원문에 없는 인용으로 모든 항목이 제외되어도 status는 ok이며 dropped로 구분한다.
     return {"status": "ok", "items": items, "dropped": dropped}
 
 if __name__ == "__main__":
