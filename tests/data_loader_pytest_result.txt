@@ -1,0 +1,17 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.7, pytest-9.1.1, pluggy-1.7.0 -- C:\Users\kimrn\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\dev\Team_Decoders
+collecting ... collected 9 items
+
+tests/test_data_loader.py::test_load_csv_normal PASSED                   [ 11%]
+tests/test_data_loader.py::test_load_csv_boundary PASSED                 [ 22%]
+tests/test_data_loader.py::test_load_csv_exception PASSED                [ 33%]
+tests/test_data_loader.py::test_validate_normal PASSED                   [ 44%]
+tests/test_data_loader.py::test_validate_boundary PASSED                 [ 55%]
+tests/test_data_loader.py::test_validate_exception PASSED                [ 66%]
+tests/test_data_loader.py::test_select_sales_normal PASSED               [ 77%]
+tests/test_data_loader.py::test_select_sales_boundary PASSED             [ 88%]
+tests/test_data_loader.py::test_select_sales_exception PASSED            [100%]
+
+============================== 9 passed in 1.11s ==============================
