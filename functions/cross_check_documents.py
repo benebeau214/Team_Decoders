@@ -1,4 +1,6 @@
 from collections.abc import Mapping
+from decimal import Decimal
+import re
 
 
 _COMPARISON_FIELDS = (
@@ -10,6 +12,15 @@ _COMPARISON_FIELDS = (
 
 def _normalized(value: str) -> str:
     return " ".join(value.split()).casefold()
+
+
+def _normalized_amount(value: str):
+    compact = re.sub(r"\s+", "", value)
+    match = re.fullmatch(r"([+-]?(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.[0-9]+)?)(원|만원|백만원|억원)", compact)
+    if match:
+        scales = {"원": 1, "만원": 10000, "백만원": 1000000, "억원": 100000000}
+        return Decimal(match[1].replace(",", "")) * scales[match[2]]
+    return _normalized(value)
 
 
 def _describe_deal(deal: Mapping[str, str]) -> str:
@@ -42,6 +53,13 @@ def cross_check_documents(
             raise TypeError(f"disc_row의 {field!r}은 문자열이어야 합니다.")
 
     issues: list[dict[str, str]] = []
+    for field in ("related_party", "relationship", "transaction_type", "amount"):
+        if not _normalized(disc_row.get(field, "")):
+            issues.append({"issue": f"정보공개서의 {field} 값이 누락되었습니다.",
+                           "evidence": _describe_deal(disc_row)})
+    if issues:
+        return issues
+
     matching_deals = [
         deal
         for deal in deals
@@ -64,40 +82,37 @@ def cross_check_documents(
             )
         return [{"issue": issue, "evidence": evidence}]
 
+    same_type = [deal for deal in matching_deals
+                 if _normalized(deal.get("transaction_type", ""))
+                 == _normalized(disc_row["transaction_type"])]
+    if same_type:
+        matching_deals = same_type
+    if len(matching_deals) > 1:
+        return [{"issue": "동일 거래처의 비교 대상이 여러 건이므로 개별 거래 또는 합계 기준 확인이 필요합니다.",
+                 "evidence": "; ".join(_describe_deal(deal) for deal in matching_deals)}]
+
     for deal in matching_deals:
         for field, label in _COMPARISON_FIELDS:
             audited_value = deal.get(field, "")
             disclosed_value = disc_row.get(field, "")
-            if _normalized(audited_value) == _normalized(disclosed_value):
+            if not _normalized(audited_value):
+                issues.append({"issue": f"감사보고서의 {label} 값이 누락되었습니다.",
+                               "evidence": _describe_deal(deal)})
+                continue
+            normalize = _normalized_amount if field == "amount" else _normalized
+            if normalize(audited_value) == normalize(disclosed_value):
                 continue
 
             issues.append(
                 {
                     "issue": (
-                        f"{disclosure_party!r} 거래의 {label}이 "
+                        f"{disclosure_party!r} 거래의 {label} 값이 "
                         "감사보고서 주석과 정보공개서에서 다릅니다."
                     ),
                     "evidence": (
                         f"감사보고서: {field}={audited_value!r}; "
                         f"정보공개서: {field}={disclosed_value!r}; "
                         f"원문 인용: {deal.get('quote', '')!r}"
-                    ),
-                }
-            )
-
-    matched_party = _normalized(disclosure_party)
-    for deal in deals:
-        audited_party = deal.get("related_party", "")
-        if _normalized(audited_party) and _normalized(audited_party) != matched_party:
-            issues.append(
-                {
-                    "issue": (
-                        f"감사보고서 주석의 거래처 {audited_party!r}가 "
-                        "정보공개서에 기재되어 있지 않습니다."
-                    ),
-                    "evidence": (
-                        f"감사보고서: {_describe_deal(deal)}; "
-                        f"정보공개서: {_describe_deal(disc_row)}"
                     ),
                 }
             )
