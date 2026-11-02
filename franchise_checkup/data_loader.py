@@ -1,36 +1,63 @@
 import pandas as pd
 import math
 from pandas.errors import EmptyDataError, ParserError
-
+import csv
 
 def load_csv_table(filepath: str, required_cols: list[str]) -> pd.DataFrame:
     """Load a comma- or semicolon-delimited CSV and validate required columns."""
+
+    # 수정 1: required_cols 자료형 검증
+    if not isinstance(required_cols, list) or not all(
+        isinstance(col, str) and col.strip() for col in required_cols
+    ):
+        raise ValueError("required_cols must be a list of non-empty strings")
+
+    # 수정 2: 지원 구분자 확인
     try:
         try:
-            data = pd.read_csv(filepath, encoding="utf-8", sep=None, engine="python")
+            with open(filepath, "r", encoding="utf-8", newline="") as f:
+                sample = f.read(4096)
+            encoding = "utf-8"
         except UnicodeDecodeError:
-            try:
-                data = pd.read_csv(
-                    filepath,
-                    encoding="cp949",
-                    sep=None,
-                    engine="python",
-                )
-            except UnicodeDecodeError as cp949_error:
-                raise ValueError(
-                    f"CSV file could not be decoded as UTF-8 or CP949: {filepath}"
-                ) from cp949_error
+            with open(filepath, "r", encoding="cp949", newline="") as f:
+                sample = f.read(4096)
+            encoding = "cp949"
+
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;")
+            delimiter = dialect.delimiter
+        except csv.Error:
+            # 단일 열 CSV도 허용
+            delimiter = ","
+
+        data = pd.read_csv(
+            filepath,
+            encoding=encoding,
+            sep=delimiter,
+        )
+
     except EmptyDataError as error:
-        raise ValueError(f"CSV file has no header row: {filepath}") from error
+        raise ValueError(
+            f"CSV file has no header row: {filepath}"
+        ) from error
     except ParserError as error:
         raise ValueError(
-            f"CSV file could not be parsed as comma- or semicolon-delimited data: "
-            f"{filepath}"
+            f"CSV file could not be parsed: {filepath}"
+        ) from error
+    except UnicodeDecodeError as error:
+        raise ValueError(
+            f"CSV file could not be decoded as UTF-8 or CP949: {filepath}"
         ) from error
 
-    missing_cols = [column for column in required_cols if column not in data.columns]
+    missing_cols = [
+        col for col in required_cols
+        if col not in data.columns
+    ]
+
     if missing_cols:
-        raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
+        raise ValueError(
+            f"Missing required columns: {', '.join(missing_cols)}"
+        )
 
     return data
 
