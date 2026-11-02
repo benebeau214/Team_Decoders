@@ -18,7 +18,7 @@ def calc_financial_ratios(fin_row: dict) -> dict:
 
     def value_for(key):
         value = fin_row.get(key)
-        if value is None or value != value:
+        if not isinstance(value, (int, float)) or value != value:
             return None
         return value
 
@@ -81,7 +81,7 @@ def calc_termination_rate(disc_row: dict) -> float | None:
 
     def value_for(key):
         value = disc_row.get(key)
-        if value is None or value != value:
+        if not isinstance(value, (int, float)) or value != value:
             return None
         return value
 
