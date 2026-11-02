@@ -4,7 +4,8 @@
 """
 import pytest
 
-from signals import judge_risk_signals
+from franchise_checkup.signals import judge_risk_signals
+
 
 THRESHOLDS = {"debt_warn": 200, "debt_danger": 400, "term_warn": 10, "term_danger": 20}
 ITEMS = ["부채비율", "자본잠식", "영업이익률", "계약 해지율"]
