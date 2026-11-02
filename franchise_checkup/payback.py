@@ -88,6 +88,7 @@ def simulate_payback(
             {
                 "scenario": scenario,
                 "monthly_net_profit": round(monthly_net_profit, 1),
+                # 수정 2: 불필요한 NaN 삼항식 단순화
                 "payback_months": round(payback_months, 1),
                 "uncertain": uncertain,
             }
