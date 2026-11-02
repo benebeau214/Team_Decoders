@@ -162,3 +162,15 @@ def test_full_impairment_flows_to_judge():
     ratios = calc_financial_ratios({**FIN, "total_equity": -50.0})
     result = judge_risk_signals(ratios, calc_termination_rate(COMPOSE), THRESHOLDS)
     assert levels(result) == ["확인 필요", "위험", "주의", "정상"]
+
+
+def test_regression_non_numeric_is_none():
+    """회귀(결함): 숫자가 아닌 값(쉼표 문자열 등)은 예외 없이 None/'NA'로 처리."""
+    # calc_termination_rate: 연초 가맹점 수가 쉼표 문자열
+    assert calc_termination_rate({**COMPOSE, "stores_begin": "2,370"}) is None
+
+    # calc_financial_ratios: 부채총계만 문자열, 나머지는 FIN 그대로
+    result = calc_financial_ratios({**FIN, "total_liabilities": "150"})
+    assert result["debt_ratio"] is None
+    assert result["op_margin"] == pytest.approx(-5.0)
+    assert result["capital_status"] == "정상"
