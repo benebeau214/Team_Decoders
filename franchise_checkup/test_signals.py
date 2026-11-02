@@ -50,3 +50,10 @@ def test_t10_empty_ratios_raises():
     """T10 예외: 필수 키가 없는 ratios → ValueError."""
     with pytest.raises(ValueError):
         judge_risk_signals({}, 3.0, THRESHOLDS)
+        
+def test_t11_nan_is_check_needed():
+    """T11 회귀(결함 1): NaN 값은 '정상'이 아니라 '확인 필요'로 판정."""
+    nan = float("nan")
+    ratios = {"debt_ratio": nan, "op_margin": nan, "capital_status": "정상"}
+    result = judge_risk_signals(ratios, nan, THRESHOLDS)
+    assert levels(result) == ["확인 필요", "정상", "확인 필요", "확인 필요"]
