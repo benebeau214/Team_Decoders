@@ -1,0 +1,11 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\lch41\decoders\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\lch41\decoders
+collecting ... collected 3 items
+
+test_cross_check_documents.py::test_normal_matching_deal PASSED          [ 33%]
+test_cross_check_documents.py::test_boundary_empty_audit_deals PASSED    [ 66%]
+test_cross_check_documents.py::test_exception_invalid_deals_type PASSED  [100%]
+
+============================== 3 passed in 0.05s ==============================

@@ -1,0 +1,14 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\lch41\decoders\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\lch41\decoders
+collecting ... collected 6 items
+
+test_extractor.py::test_t11_purchase PASSED                              [ 16%]
+test_extractor.py::test_t12_penalty PASSED                               [ 33%]
+test_extractor.py::test_t13_no_items PASSED                              [ 50%]
+test_extractor.py::test_t14_empty_input PASSED                           [ 66%]
+test_extractor.py::test_t15_broken_json PASSED                           [ 83%]
+test_extractor.py::test_t16_nonexistent_quote PASSED                     [100%]
+
+============================== 6 passed in 0.04s ==============================
