@@ -38,7 +38,8 @@ def simulate_payback(
         A DataFrame with scenario results in input order.
 
     Raises:
-        ValueError: If required data is invalid or no scenarios are provided.
+        ValueError: 평균매출이 없거나 0 이하, 창업비용이 없거나 음수,
+            user_input 값이 없거나 음수, 시나리오가 비어 있는 경우.
     """
     if (
         "avg_annual_sales" not in disc_row
@@ -55,6 +56,9 @@ def simulate_payback(
         raise ValueError("창업비용 없음")
 
     input_fields = ("deposit", "key_money", "loan_amount", "loan_rate")
+    # 수정 1: user_input 값 누락 검증
+    if any(user_input.get(field) is None for field in input_fields):
+        raise ValueError("입력 누락")
     if any(user_input[field] < 0 for field in input_fields):
         raise ValueError("음수 입력")
 
@@ -84,11 +88,7 @@ def simulate_payback(
             {
                 "scenario": scenario,
                 "monthly_net_profit": round(monthly_net_profit, 1),
-                "payback_months": (
-                    round(payback_months, 1)
-                    if not math.isnan(payback_months)
-                    else float("nan")
-                ),
+                "payback_months": round(payback_months, 1),
                 "uncertain": uncertain,
             }
         )

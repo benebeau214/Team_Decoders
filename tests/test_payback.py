@@ -64,3 +64,10 @@ def test_calc_payback_months_boundary():
 def test_calc_payback_months_exception():
     # 월 순이익 음수 -> 회수 불가(NaN)
     assert math.isnan(calc_payback_months(15000, -5))
+
+# 3. 코드 리딩에서 발견한 결함 회귀 테스트
+
+def test_simulate_payback_missing_user_input_key():
+    user = {k: v for k, v in USER.items() if k != "loan_rate"}
+    with pytest.raises(ValueError, match="입력 누락"):
+        simulate_payback(DISC, user, SCEN)
