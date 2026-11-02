@@ -138,12 +138,13 @@ def select_avg_sales(
         raise ValueError("disc_row must be a dict")
     if not isinstance(region_rows, pd.DataFrame):
         raise ValueError("region_rows must be a pandas DataFrame")
-    if "avg_annual_sales" not in disc_row:
-        raise ValueError("disc_row must contain avg_annual_sales")
     if not {"region", "avg_annual_sales"}.issubset(region_rows.columns):
         raise ValueError(
             "region_rows must contain region and avg_annual_sales columns"
         )
+
+    # 수정 1: 지역명 앞뒤 공백 제거
+    region = region.strip()
 
     matching_rows = region_rows.loc[region_rows["region"] == region]
     if len(matching_rows) > 1:
@@ -159,6 +160,10 @@ def select_avg_sales(
             if regional_value is not None and math.isfinite(regional_value):
                 if regional_value > 0:
                     return {"value": regional_value, "basis": region}
+
+    # 수정 2: 전국 평균매출이 실제로 필요할 때 검증
+    if "avg_annual_sales" not in disc_row:
+        raise ValueError("disc_row must contain avg_annual_sales")
 
     national_value = disc_row["avg_annual_sales"]
     if isinstance(national_value, bool):
