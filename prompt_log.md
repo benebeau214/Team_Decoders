@@ -321,3 +321,81 @@
     - 정상: 선택 지역의 평균매출 반환
     - 경계: 선택 지역 데이터가 없으면 전국 평균매출 반환
     - 예외: 지역 평균매출과 전국 평균매출을 모두 사용할 수 없으면 `ValueError` 발생
+
+---
+
+## [signals] judge_risk_signals — 2026-10-29 (생성·리딩) / 2026-11-02 (결함 수정)
+
+- **작성자:** 최영효
+- **사용 도구:** GitHub Copilot Chat 
+- **프롬프트:**
+    
+    ```
+    #file:test_signals.py 를 참고해서 아래 함수를 구현해 주세요.
+    
+    당신은 파이썬 백엔드 개발을 돕는 어시스턴트입니다.
+    '프랜차이즈 본사 재무 건강검진' 시스템의 signals.py(재무·계약 신호 판정 모듈)에 들어갈 함수를 구현해 주세요.
+    이 함수는 미리 계산된 재무 지표와 계약 해지율을 임계값과 비교해 4개 항목의 위험 수준을 판정합니다.
+    
+    [함수 시그니처 — 변경 금지]
+    def judge_risk_signals(ratios: dict, termination_rate: float | None, thresholds: dict) -> list[dict]:
+    
+    [입력 명세]
+    - ratios: {"debt_ratio": float | None, "op_margin": float | None, "capital_status": str}
+      예: {"debt_ratio": 450.0, "op_margin": -2.0, "capital_status": "완전잠식"}
+      capital_status는 "정상" | "부분잠식" | "완전잠식" 중 하나이며, 그 외 값(예: "NA")은 정보 없음으로 본다.
+    - termination_rate: 계약 해지율(%), 정보가 없으면 None. 예: 25.0
+    - thresholds: {"debt_warn": 200, "debt_danger": 400, "term_warn": 10, "term_danger": 20}
+    
+    [출력 명세]
+    항상 길이 4인 리스트를 아래 순서로 반환한다.
+    [{"item": "부채비율", ...}, {"item": "자본잠식", ...}, {"item": "영업이익률", ...}, {"item": "계약 해지율", ...}]
+    각 원소는 정확히 4개 키를 가진다: {"item": str, "level": str, "value": 입력값 그대로, "reason": str(판정 근거 한 문장)}
+    level은 "정상" | "주의" | "위험" | "확인 필요" 중 하나다.
+    
+    [판정 규칙]
+    1) 부채비율: None → "확인 필요" / debt_ratio ≥ debt_danger → "위험" / debt_ratio ≥ debt_warn → "주의" / 그 외 "정상"
+    2) 자본잠식: "완전잠식" → "위험" / "부분잠식" → "주의" / "정상" → "정상" / 그 외 값 → "확인 필요"
+    3) 영업이익률: None → "확인 필요" / op_margin < 0 → "주의" / 그 외 "정상"
+    4) 계약 해지율: None → "확인 필요" / termination_rate ≥ term_danger → "위험" / termination_rate ≥ term_warn → "주의" / 그 외 "정상"
+    임계값과 정확히 같으면 해당 수준으로 판정한다(이상, ≥).
+    
+    [예외·경계 방침]
+    - ratios가 dict가 아니거나 "debt_ratio", "op_margin", "capital_status" 키 중 하나라도 없으면 ValueError("필수 지표 누락")를 발생시킨다.
+    - 값이 None이거나 알 수 없는 값이면 예외를 내지 않고 해당 항목을 "확인 필요"로 판정한다. 절대 "정상"으로 대체하지 않는다.
+    
+    [제약 조건]
+    - 표준 라이브러리만 사용 (pandas 등 외부 라이브러리 import 금지)
+    - 타입 힌트와 docstring 필수 (Args / Returns / Raises 포함)
+    - 임계값 숫자를 함수 안에 하드코딩하지 말고 반드시 thresholds 인자에서 읽을 것
+    - 전역 변수 수정, print, 파일·화면 접근 금지 (값만 받아 값만 반환하는 순수 함수)
+    - 가변 기본값 인자 사용 금지
+    
+    [통과해야 할 테스트 — test_signals.py]
+    T06: ratios{debt_ratio:450.0, op_margin:-2.0, capital_status:"완전잠식"}, termination_rate 25.0 → level ["위험","위험","주의","위험"]
+    T07: ratios{debt_ratio:250.0, op_margin:3.0, capital_status:"부분잠식"}, termination_rate 12.0 → ["주의","주의","정상","주의"]
+    T08: ratios{debt_ratio:200.0, op_margin:5.0, capital_status:"정상"}, termination_rate 3.0 → ["주의","정상","정상","정상"]
+    T09: ratios{debt_ratio:None, op_margin:None, capital_status:"NA"}, termination_rate None → ["확인 필요"] × 4 (예외 없음)
+    T10: ratios = {} → ValueError
+    ```
+    
+- **생성 코드 위치:** 커밋 `81abe11` (수정 전 원본)
+- **코드 리딩에서 발견한 결함 및 개선 사항:** (줄 번호는 `81abe11` 기준)
+    1. **[결함]** NaN이 들어오면 부채비율·영업이익률·해지율이 "정상"으로 판정되었다. `signals.py`:36-38(부채비율), :59-61(영업이익률), :72-74(해지율)의 `else` 블록. NaN과 비교하면 항상 False라서 마지막 `else`로 빠지기 때문이다. 직접 실행해서 확인했다.
+    2. **[개선점]** 판정 블록 반복 (:27-38, :63-74). 부채비율과 해지율 판정이 같은 구조(None → 확인 필요 / 위험 / 주의 / 그 외 정상)로 반복되어 있어, 수정할 때 여러 곳을 함께 고쳐야 하고 한 곳을 빠뜨릴 위험이 있다. 결함 1의 NaN 문제도 이 반복 구조 때문에 세 군데에 똑같이 생겼다. 공통 판정 함수 하나로 묶었다면 한 곳만 고치면 된다.
+    3. **[개선점]** 문자열 값이 들어오면 `TypeError` (:30, :56, :66). `debt_ratio`에 `'120'`처럼 숫자를 뜻하지만 문자열인 값이 들어오면 비교 연산에서 에러가 나서 나머지 항목의 결과까지 나오지 않고 프로그램 전체가 멈춘다. 직접 실행해서 확인했다 (`TypeError: '>=' not supported between instances of 'str' and 'int'`). 시그니처상 입력은 숫자 또는 None이므로 결함이 아닌 개선점으로 분류했다.
+    - 개선점 2·3은 이번 사이클에서 수정하지 않고 기록만 했다. 이번 수정은 결함 1에 한정했다.
+- **회귀 테스트:** 커밋 `8b72026`
+    - `test_t11_nan_is_check_needed` 추가. 수정 전 원본(`81abe11`)에서 1 failed, 5 passed로 실패하는 것을 먼저 확인했다 (실제 결과 `['정상','정상','정상','정상']`).
+    - 처음에 자본잠식 기대값을 '확인 필요'로 잘못 적었다가, 입력이 "정상"이므로 '정상'이 맞다는 것을 확인하고 고쳤다.
+- **수정 내역:** 
+    1. `debt_ratio`·`op_margin`·`termination_rate`의 None 조건에 `or math.isnan(값)`을 추가해 NaN도 '확인 필요'로 판정하도록 했다.
+    2. 처음에는 `x != x` 방식으로 고쳤다가 의도가 더 잘 드러나도록 `math.isnan`으로 변경했다. 변경 과정에서 `import math`를 지워 `NameError`로 4 failed가 났고, import를 복구해 해결했다.
+    3. 함수 시그니처와 개선점 2·3 관련 코드는 변경하지 않았다.
+- **수정 코드 위치:** 커밋 `d2519b9`
+- **팀 규칙 반영:** 커밋 `66cf4a2` (`test_signals.py`를 `tests/`로 이동, import를 `from franchise_checkup.signals import judge_risk_signals`로 변경, 테스트 내용은 그대로)
+- **테스트 결과:** `pytest 6 pass` (출력: `tests/signals_pytest_result.txt`)
+    - 정상: 위험·주의가 섞인 본사 판정, 항목 4개·순서·반환 키 고정 (T06, T07)
+    - 경계: 부채비율이 임계값과 정확히 같으면 '주의' (T08)
+    - 예외: 값 없음 → '확인 필요' (T09), 필수 키 없는 ratios → `ValueError` (T10)
+    - 회귀: NaN → '확인 필요' (T11)

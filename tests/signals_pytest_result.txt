@@ -1,0 +1,14 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.1.1, pluggy-1.7.0 -- C:\ai-studio\ai-studio-week02\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\ai-studio\Team_Decoders
+collecting ... collected 6 items
+
+tests/test_signals.py::test_t06_normal_all_risky PASSED                  [ 16%]
+tests/test_signals.py::test_t07_normal_mixed PASSED                      [ 33%]
+tests/test_signals.py::test_t08_boundary_exact_threshold PASSED          [ 50%]
+tests/test_signals.py::test_t09_missing_values_are_check_needed PASSED   [ 66%]
+tests/test_signals.py::test_t10_empty_ratios_raises PASSED               [ 83%]
+tests/test_signals.py::test_t11_nan_is_check_needed PASSED               [100%]
+
+============================== 6 passed in 0.05s ==============================
