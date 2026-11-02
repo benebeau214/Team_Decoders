@@ -1,3 +1,5 @@
+import math
+
 def judge_risk_signals(
     ratios: dict,
     termination_rate: float | None,
@@ -24,7 +26,7 @@ def judge_risk_signals(
     op_margin = ratios["op_margin"]
     capital_status = ratios["capital_status"]
 
-    if debt_ratio is None:
+    if debt_ratio is None or math.isnan(debt_ratio):
         debt_level = "확인 필요"
         debt_reason = "부채비율 정보가 없어 위험 수준을 확인할 수 없습니다."
     elif debt_ratio >= thresholds["debt_danger"]:
@@ -50,7 +52,7 @@ def judge_risk_signals(
         capital_level = "확인 필요"
         capital_reason = "자본 상태를 확인할 수 없습니다."
 
-    if op_margin is None:
+    if op_margin is None or math.isnan(op_margin):
         margin_level = "확인 필요"
         margin_reason = "영업이익률 정보가 없어 위험 수준을 확인할 수 없습니다."
     elif op_margin < 0:
@@ -60,7 +62,7 @@ def judge_risk_signals(
         margin_level = "정상"
         margin_reason = f"영업이익률({op_margin})이 0 이상입니다."
 
-    if termination_rate is None:
+    if termination_rate is None or math.isnan(termination_rate):
         termination_level = "확인 필요"
         termination_reason = "계약 해지율 정보가 없어 위험 수준을 확인할 수 없습니다."
     elif termination_rate >= thresholds["term_danger"]:
