@@ -4,7 +4,7 @@
 """
 import pytest
 
-from franchise_checkup.signals import judge_risk_signals
+from franchise_checkup.signals import calc_financial_ratios, calc_termination_rate, judge_risk_signals
 
 
 THRESHOLDS = {"debt_warn": 200, "debt_danger": 400, "term_warn": 10, "term_danger": 20}
@@ -58,3 +58,107 @@ def test_t11_nan_is_check_needed():
     ratios = {"debt_ratio": nan, "op_margin": nan, "capital_status": "정상"}
     result = judge_risk_signals(ratios, nan, THRESHOLDS)
     assert levels(result) == ["확인 필요", "정상", "확인 필요", "확인 필요"]
+
+
+# ---------------------------------------------------------------
+# calc_financial_ratios
+# ---------------------------------------------------------------
+FIN = {
+    "total_liabilities": 150.0,
+    "total_equity": 50.0,
+    "capital_stock": 30.0,
+    "revenue": 200.0,
+    "operating_income": -10.0,
+}
+
+
+def test_ratios_normal():
+    """정상: 부채비율·영업이익률 계산, 출력 키는 judge_risk_signals 입력과 동일."""
+    result = calc_financial_ratios(FIN)
+    assert set(result.keys()) == {"debt_ratio", "op_margin", "capital_status"}
+    assert result["debt_ratio"] == pytest.approx(300.0)
+    assert result["op_margin"] == pytest.approx(-5.0)  # 영업손실은 음수 그대로
+    assert result["capital_status"] == "정상"
+
+
+def test_ratios_not_rounded():
+    """정상: 판정이 바뀌지 않도록 반올림하지 않은 값을 반환."""
+    result = calc_financial_ratios({**FIN, "total_liabilities": 100.0, "total_equity": 30.0})
+    assert result["debt_ratio"] == pytest.approx(100.0 / 30.0 * 100)  # 333.33…, 333.3이면 실패
+
+
+def test_ratios_boundary_capital_impairment():
+    """경계: 자본총계 = 자본금이면 정상, 자본금보다 작으면 부분잠식."""
+    assert calc_financial_ratios({**FIN, "total_equity": 30.0})["capital_status"] == "정상"
+    result = calc_financial_ratios({**FIN, "total_equity": 20.0})
+    assert result["capital_status"] == "부분잠식"
+    assert result["debt_ratio"] == pytest.approx(750.0)
+
+
+def test_ratios_boundary_full_impairment():
+    """경계: 자본총계 ≤ 0이면 완전잠식(자본금 없어도), 부채비율은 None(N/M), 예외 없음."""
+    zero = calc_financial_ratios({**FIN, "total_equity": 0.0})
+    assert zero["capital_status"] == "완전잠식"
+    assert zero["debt_ratio"] is None  # ZeroDivisionError 없음
+    negative = calc_financial_ratios({**FIN, "total_equity": -50.0, "capital_stock": None})
+    assert negative["capital_status"] == "완전잠식"
+    assert negative["debt_ratio"] is None  # -300%가 '정상'으로 판정되는 것 방지
+
+
+def test_ratios_missing_values_are_none():
+    """예외: 값 없음(None·NaN·키 없음)·매출액 0·부채 음수 → None/'NA', 예외 없음."""
+    result = calc_financial_ratios({
+        "total_liabilities": -10.0,
+        "total_equity": float("nan"),
+        "capital_stock": None,
+        "revenue": 0.0,
+        "operating_income": 5.0,
+    })
+    assert result == {"debt_ratio": None, "op_margin": None, "capital_status": "NA"}
+    assert calc_financial_ratios({}) == {"debt_ratio": None, "op_margin": None, "capital_status": "NA"}
+
+
+def test_ratios_not_dict_raises():
+    """예외: fin_row가 dict가 아니면 ValueError."""
+    with pytest.raises(ValueError):
+        calc_financial_ratios([])
+
+
+# ---------------------------------------------------------------
+# calc_termination_rate
+# ---------------------------------------------------------------
+COMPOSE = {"stores_begin": 2370, "contract_terminated": 27, "contract_ended": 5}  # 공정위 2025 컴포즈커피
+
+
+def test_rate_normal():
+    """정상: (해지 + 종료) / 연초 가맹점 수 × 100, 반올림 없음."""
+    assert calc_termination_rate(COMPOSE) == pytest.approx(32 / 2370 * 100)
+
+
+def test_rate_boundary_zero_stores():
+    """경계: 연초 가맹점 수 0이면 None (ZeroDivisionError 없음)."""
+    assert calc_termination_rate({**COMPOSE, "stores_begin": 0}) is None
+
+
+def test_rate_missing_or_negative_is_none():
+    """예외: 값 없음(None·NaN·키 없음)·음수 건수 → None, 예외 없음."""
+    assert calc_termination_rate({**COMPOSE, "contract_ended": None}) is None
+    assert calc_termination_rate({**COMPOSE, "stores_begin": float("nan")}) is None
+    assert calc_termination_rate({"stores_begin": 2370}) is None
+    assert calc_termination_rate({**COMPOSE, "contract_terminated": -1}) is None
+
+
+def test_rate_not_dict_raises():
+    """예외: disc_row가 dict가 아니면 ValueError."""
+    with pytest.raises(ValueError):
+        calc_termination_rate("2370")
+
+
+# ---------------------------------------------------------------
+# 연결: 계산 → 판정
+# ---------------------------------------------------------------
+def test_full_impairment_flows_to_judge():
+    """연결: 완전잠식 본사는 부채비율 '확인 필요', 자본잠식 '위험' (부채비율이 '정상'으로 나오면 안 됨)."""
+    ratios = calc_financial_ratios({**FIN, "total_equity": -50.0})
+    result = judge_risk_signals(ratios, calc_termination_rate(COMPOSE), THRESHOLDS)
+    assert levels(result) == ["확인 필요", "위험", "주의", "정상"]
