@@ -1,5 +1,109 @@
 import math
 
+def calc_financial_ratios(fin_row: dict) -> dict:
+    """
+    재무 비율과 자본잠식 상태를 계산합니다.
+
+    Args:
+        fin_row: 재무 항목을 담은 딕셔너리.
+
+    Returns:
+        부채비율, 영업이익률, 자본잠식 상태를 담은 딕셔너리.
+
+    Raises:
+        ValueError: fin_row가 딕셔너리가 아닌 경우.
+    """
+    if not isinstance(fin_row, dict):
+        raise ValueError("재무 행 형식 오류")
+
+    def value_for(key):
+        value = fin_row.get(key)
+        if not isinstance(value, (int, float)) or value != value:
+            return None
+        return value
+
+    total_liabilities = value_for("total_liabilities")
+    total_equity = value_for("total_equity")
+    capital_stock = value_for("capital_stock")
+    revenue = value_for("revenue")
+    operating_income = value_for("operating_income")
+
+    debt_ratio = None
+    if (
+        total_liabilities is not None
+        and total_equity is not None
+        and total_equity > 0
+        and total_liabilities >= 0
+    ):
+        debt_ratio = total_liabilities / total_equity * 100
+
+    op_margin = None
+    if (
+        revenue is not None
+        and operating_income is not None
+        and revenue > 0
+    ):
+        op_margin = operating_income / revenue * 100
+
+    if total_equity is None:
+        capital_status = "NA"
+    elif total_equity <= 0:
+        capital_status = "완전잠식"
+    elif capital_stock is None or capital_stock < 0:
+        capital_status = "NA"
+    elif total_equity < capital_stock:
+        capital_status = "부분잠식"
+    else:
+        capital_status = "정상"
+
+    return {
+        "debt_ratio": debt_ratio,
+        "op_margin": op_margin,
+        "capital_status": capital_status,
+    }
+
+
+def calc_termination_rate(disc_row: dict) -> float | None:
+    """
+    가맹점 계약 종료율을 계산합니다.
+
+    Args:
+        disc_row: 연초 가맹점 수 및 계약 종료 건수를 담은 딕셔너리.
+
+    Returns:
+        계약 종료율. 계산할 수 없는 경우 None.
+
+    Raises:
+        ValueError: disc_row가 딕셔너리가 아닌 경우.
+    """
+    if not isinstance(disc_row, dict):
+        raise ValueError("정보공개서 행 형식 오류")
+
+    def value_for(key):
+        value = disc_row.get(key)
+        if not isinstance(value, (int, float)) or value != value:
+            return None
+        return value
+
+    stores_begin = value_for("stores_begin")
+    contract_terminated = value_for("contract_terminated")
+    contract_ended = value_for("contract_ended")
+
+    if (
+        stores_begin is None
+        or contract_terminated is None
+        or contract_ended is None
+        or stores_begin == 0
+        or stores_begin < 0
+        or contract_terminated < 0
+        or contract_ended < 0
+    ):
+        return None
+
+    return (
+        (contract_terminated + contract_ended) / stores_begin * 100
+    )
+
 def judge_risk_signals(
     ratios: dict,
     termination_rate: float | None,

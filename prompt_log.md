@@ -679,3 +679,101 @@ disc_row: 정보공개서에서 추출한 거래 한 행.
     - 경계: 부채비율이 임계값과 정확히 같으면 '주의' (T08)
     - 예외: 값 없음 → '확인 필요' (T09), 필수 키 없는 ratios → `ValueError` (T10)
     - 회귀: NaN → '확인 필요' (T11)
+
+
+---
+
+## [signals] calc_financial_ratios · calc_termination_rate — 2026-11-03
+
+- **작성자:** 최영효
+- **사용 도구:** GitHub Copilot Chat 
+- **명세 결정 사항:** (설계 문서 V1에는 함수 한 줄 설명만 있어 구현 전에 직접 정함)
+    1. 키 이름: CSV 표준 스키마가 아직 확정되지 않아 직접 정함. `fin_row`: `total_liabilities`, `total_equity`, `capital_stock`, `revenue`, `operating_income` / `disc_row`: `stores_begin`, `contract_terminated`, `contract_ended` (공정위 정보공개서 `ystFrcsCnt`, `ctrtCncltnFrcsCnt`, `ctrtEndFrcsCnt`에 대응). 출력 키는 `judge_risk_signals` 입력(`debt_ratio`, `op_margin`, `capital_status`)과 맞춤.
+    2. 반올림하지 않음: 재무비율 반올림은 표시 단계의 일이고, 계산 함수에서 반올림하면 판정이 바뀔 수 있다 (예: 199.96% → 200.0 → '주의'). 채윤 님 payback 명세의 "판정은 반올림 전 값으로"와 같은 원칙.
+    3. 자본총계 ≤ 0이면 부채비율 `None`: 자본이 음수면 부채비율이 음수(예: -300%)가 되어 '정상'으로 판정되는 문제를 막기 위해, 실무의 N/M(의미 없음) 표시 관행을 따름. 위험은 자본잠식 항목('완전잠식' → 위험)이 잡는다.
+    4. 데이터 문제(정보 없음, 음수 건수, 0)는 예외 대신 `None`/`"NA"`로 처리해 '확인 필요'로 넘김: 사전 적재 데이터의 오류는 사용자가 고칠 수 없고, 값 하나 때문에 리포트 전체가 멈추면 안 되기 때문. 예외(`ValueError`)는 입력이 dict가 아닐 때(호출 실수)만 발생.
+- **테스트(구현 전 작성):** 커밋 `05a7cd1` (calc_financial_ratios 6개, calc_termination_rate 4개, 계산→판정 연결 1개). 함수가 없어 `ImportError`로 실패하는 것을 확인함. 해지율 테스트 값은 처음에 공개 정보공개서 수치를 썼다가, 실제 본사와 가상의 재무값이 한 테스트에 섞이지 않도록 이후 가상 값(연초 1000, 해지 30, 종료 20 → 5.0%)으로 교체함.
+- **프롬프트:**
+    
+    ```
+    #file:tests/test_signals.py 와 #file:franchise_checkup/signals.py 를 참고해서 아래 함수 2개를 구현해 주세요.
+    
+    당신은 파이썬 백엔드 개발을 돕는 어시스턴트입니다.
+    '프랜차이즈 본사 재무 건강검진' 시스템의 signals.py(재무·계약 신호 판정 모듈)에 들어갈 계산 함수 2개를 구현해 주세요.
+    두 함수의 출력은 같은 파일에 이미 있는 judge_risk_signals의 입력으로 그대로 들어갑니다.
+    명세에 모호한 점이 있으면 코드를 쓰기 전에 질문 목록부터 알려 주세요. 추측해서 구현하지 마세요.
+    
+    [함수 시그니처 — 변경 금지]
+    def calc_financial_ratios(fin_row: dict) -> dict:
+    def calc_termination_rate(disc_row: dict) -> float | None:
+    
+    [calc_financial_ratios 명세]
+    입력 fin_row 키: "total_liabilities"(부채총계), "total_equity"(자본총계), "capital_stock"(자본금), "revenue"(매출액), "operating_income"(영업이익)
+     예) {"total_liabilities": 150.0, "total_equity": 50.0, "capital_stock": 30.0, "revenue": 200.0, "operating_income": -10.0}
+    출력: {"debt_ratio": float | None, "op_margin": float | None, "capital_status": str} (키 3개 고정)
+    1. debt_ratio = total_liabilities / total_equity * 100
+       - total_equity <= 0 이면 None (의미 없는 비율, 0으로 나누기 금지)
+       - total_liabilities가 음수이면 None
+    2. op_margin = operating_income / revenue * 100 (영업손실이면 음수 그대로)
+       - revenue <= 0 이면 None
+    3. capital_status는 아래 순서대로 판단한다
+       - total_equity 정보 없음 → "NA"
+       - total_equity <= 0 → "완전잠식" (capital_stock 정보가 없어도)
+       - capital_stock 정보 없음 또는 음수 → "NA"
+       - total_equity < capital_stock → "부분잠식"
+       - 그 외 → "정상" (total_equity == capital_stock 은 "정상")
+    4. "정보 없음"은 키 없음, None, NaN을 모두 포함한다. 정보가 없으면 예외를 내지 않고 해당 지표를 None(capital_status는 "NA")으로 둔다.
+    5. fin_row가 dict가 아니면 ValueError("재무 행 형식 오류")
+    
+    [calc_termination_rate 명세]
+    입력 disc_row 키: "stores_begin"(연초 가맹점 수), "contract_terminated"(계약 해지 건수), "contract_ended"(계약 종료 건수)
+     예) {"stores_begin": 2370, "contract_terminated": 27, "contract_ended": 5}
+    1. 반환값 = (contract_terminated + contract_ended) / stores_begin * 100
+    2. 세 값 중 하나라도 정보 없음(키 없음, None, NaN) → None
+    3. 세 값 중 하나라도 음수 → None
+    4. stores_begin == 0 → None (0으로 나누기 금지)
+    5. disc_row가 dict가 아니면 ValueError("정보공개서 행 형식 오류")
+    
+    [공통 규칙]
+    - 두 함수 모두 반올림하지 않는다. 판정은 반올림 전 값으로 해야 하므로 원래 float를 그대로 반환한다.
+    - 데이터 문제(정보 없음, 음수, 0)는 예외 대신 None/"NA"로 처리한다. 예외는 입력이 dict가 아닐 때만 발생시킨다.
+    
+    [제약 조건]
+    - 표준 라이브러리만 사용 (pandas 등 외부 라이브러리 import 금지)
+    - 타입 힌트와 docstring 필수 (Args / Returns / Raises 포함)
+    - 전역 변수 수정, print, 파일·화면 접근 금지 (값만 받아 값만 반환하는 순수 함수)
+    - 두 함수를 signals.py의 judge_risk_signals 위에 추가한다
+    - judge_risk_signals와 tests/test_signals.py는 수정하지 말 것
+    
+    [통과해야 할 테스트 — tests/test_signals.py 전체]
+    - 기존 T06~T11 (judge_risk_signals) 6개는 계속 통과
+    - calc_financial_ratios 6개: 정상(300.0 / -5.0 / "정상"), 반올림 없음(100/30*100), 경계(자본=자본금 → 정상, 20 → 부분잠식·750.0), 완전잠식(자본 0·-50 → "완전잠식", debt_ratio None), 정보 없음(→ None·"NA"), dict 아님(→ ValueError)
+    - calc_termination_rate 4개: 정상(32/2370*100), 연초 0(→ None), 정보 없음·음수(→ None), dict 아님(→ ValueError)
+    - 연결 1개: 자본 -50 본사 → judge_risk_signals 결과 ["확인 필요", "위험", "주의", "정상"]
+    
+    [답변 형식]
+    1. 모호한 점이 있으면 질문 목록만 먼저 답해 주세요.
+    2. 없으면 signals.py에 추가할 코드만 주세요 (설명은 코드 뒤에 3줄 이내).
+    ```
+    
+- **생성 코드 위치:** 커밋 `dbf396f` (수정 전 원본, 생성 직후 pytest 17 pass)
+- **코드 리딩에서 발견한 결함 및 개선 사항:** (줄 번호는 `dbf396f` 기준)
+    1. **[결함]** 숫자가 아닌 값(예: CSV의 `"2,370"`)이 들어오면 `TypeError`로 멈춘다. `value_for`(`signals.py`:19-23, :82-86)가 None과 NaN만 걸러 내고 문자열은 그대로 통과시켜, 비교 연산(:97 `stores_begin < 0` 등)에서 에러가 난다. 프롬프트 [공통 규칙]에 "데이터 문제는 예외 대신 None/NA, 예외는 dict가 아닐 때만"이라고 명시했으므로 명세 위반이다. 직접 실행해서 확인했다 (`TypeError: '<' not supported between instances of 'str' and 'int'`).
+    2. **[개선점]** docstring 용어 부정확 (:68, :71, :74). 계산식은 해지 + 종료인데 "계약 종료율", "계약 종료 건수"라고만 써서 해지 건수가 포함된다는 것이 드러나지 않고, Args에 필요한 키 이름도 없다.
+    3. **[개선점]** `value_for` 도우미 함수가 두 함수 안에 똑같이 두 번 정의되어 있다 (:19-23, :82-86). 결함 1도 두 곳을 모두 고쳐야 했다.
+    4. **[개선점]** `stores_begin == 0 or stores_begin < 0` (:96-97)은 `stores_begin <= 0` 한 줄로 쓸 수 있다.
+    5. **[개선점]** NaN 검사를 `value != value`로 해서, 같은 파일 `judge_risk_signals`의 `math.isnan` 방식과 일관되지 않다.
+    - 개선점 2~5는 이번 사이클에서 수정하지 않고 기록만 했다. 이번 수정은 결함 1에 한정했다.
+- **회귀 테스트:** 커밋 `c362598`
+    - `test_regression_non_numeric_is_none` 추가. 수정 전 원본(`dbf396f`)에서 `TypeError`로 1 failed, 17 passed를 먼저 확인했다.
+    - 부채총계만 문자열일 때 부채비율만 `None`이 되고, 영업이익률(-5.0)과 자본잠식("정상")은 영향을 받지 않는지도 확인한다. 처음에 이 두 기대값을 잘못 적었다가(33.33, "NA") 계산식과 판단 순서를 다시 따라가 고쳤다.
+- **수정 내역:** 
+    1. `value_for` 두 곳의 조건을 `if not isinstance(value, (int, float)) or value != value:`로 바꿔 숫자가 아닌 값도 정보 없음(`None`)으로 처리했다.
+    2. 함수 시그니처와 개선점 2~5 관련 코드는 변경하지 않았다.
+- **수정 코드 위치:** 커밋 `8ef745a`
+- **테스트 결과:** `pytest 18 pass` (`tests/test_signals.py` 전체, 출력: `tests/signals_pytest_result.txt`)
+    - 정상: 부채비율·영업이익률 계산과 반올림 없음, 해지율 계산(가상 값 5.0%)
+    - 경계: 자본총계 = 자본금 → 정상, < 자본금 → 부분잠식, ≤ 0 → 완전잠식·부채비율 None, 연초 가맹점 0 → None
+    - 예외: 정보 없음·음수 → None/"NA", dict가 아닌 입력 → `ValueError`
+    - 연결: 완전잠식 본사의 계산 결과가 `judge_risk_signals`에서 부채비율 '확인 필요', 자본잠식 '위험'으로 판정
+    - 회귀: 숫자가 아닌 값 → None, 다른 지표는 영향 없음
