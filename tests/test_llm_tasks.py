@@ -3,7 +3,13 @@ import json
 import pandas as pd
 import pytest
 
-from franchise_checkup.llm_tasks import write_report
+from franchise_checkup.llm_tasks import (
+    DISCLAIMER,
+    _analysis_prompt,
+    _fallback_report,
+    _json_safe,
+    write_report,
+)
 
 
 def _valid_response(summary="검토 결과입니다.", checklist=None):
@@ -28,7 +34,7 @@ def test_write_report_returns_required_shape():
     )
 
     assert result == {
-        "summary": "검토 결과입니다.",
+        "summary": f"검토 결과입니다. {DISCLAIMER}",
         "checklist": ["계약서를 확인하세요."],
     }
     assert isinstance(result["summary"], str)
@@ -52,7 +58,7 @@ def test_prompt_focus_changes_by_user_type():
         )
 
     assert "가맹 계약 전" in prompts["예비"]
-    assert "계약 갱신 및 추가 출점" in prompts["기존"]
+    assert "현재 운영과 계약 갱신·추가 출점 전에 확인할 사항" in prompts["기존"]
     assert prompts["예비"] != prompts["기존"]
 
 
@@ -146,4 +152,95 @@ def test_markdown_fenced_json_is_accepted():
         lambda prompt: '```json\n{"summary": "요약", "checklist": []}\n```',
     )
 
-    assert result == {"summary": "요약", "checklist": []}
+    assert result == {"summary": f"요약 {DISCLAIMER}", "checklist": []}
+
+
+def test_json_safe_converts_nested_values_and_dataframe():
+    result = _json_safe(
+        {
+            "missing": pd.NA,
+            "values": (1, 2),
+            "frame": pd.DataFrame([{"amount": 10}]),
+        }
+    )
+
+    assert result == {
+        "missing": None,
+        "values": [1, 2],
+        "frame": {
+            "type": "DataFrame",
+            "empty": False,
+            "columns": ["amount"],
+            "rows": [{"amount": 10}],
+        },
+    }
+
+
+def test_json_safe_handles_empty_dataframe_boundary():
+    assert _json_safe(pd.DataFrame()) == {
+        "type": "DataFrame",
+        "empty": True,
+        "columns": [],
+        "rows": [],
+    }
+
+
+def test_json_safe_preserves_value_when_scalar_conversion_raises():
+    class InvalidScalar:
+        def item(self):
+            raise ValueError("cannot convert")
+
+    value = InvalidScalar()
+
+    assert _json_safe(value) is value
+
+
+def test_analysis_prompt_includes_serialized_analysis_and_audience():
+    prompt = _analysis_prompt(
+        [{"item": "영업이익률", "value": 2}],
+        pd.DataFrame([{"scenario": "평균"}]),
+        [{"issue": "문서 확인"}],
+        "예비",
+    )
+
+    assert "사용자 유형: 예비" in prompt
+    assert '"item": "영업이익률"' in prompt
+    assert '"scenario": "평균"' in prompt
+    assert '"issue": "문서 확인"' in prompt
+
+
+def test_analysis_prompt_preserves_empty_and_missing_inputs():
+    prompt = _analysis_prompt(None, pd.DataFrame(), [], "기존")
+
+    assert '"signals": null' in prompt
+    assert '"empty": true' in prompt
+    assert '"document_review": []' in prompt
+
+
+def test_analysis_prompt_rejects_unsupported_user_type():
+    with pytest.raises(KeyError):
+        _analysis_prompt([], [], [], "unsupported")
+
+
+def test_fallback_report_returns_user_type_specific_checklist():
+    report = _fallback_report("예비", "LLM 호출 실패")
+
+    assert "LLM 호출 실패" in report["summary"]
+    assert "본사 신호표의 위험 수준과 판정 근거를 확인하세요." in report["checklist"]
+    assert DISCLAIMER in report["summary"]
+
+
+def test_fallback_report_handles_empty_reason_boundary():
+    report = _fallback_report("기존", "")
+
+    assert "실패 원인: ." in report["summary"]
+    assert len(report["checklist"]) == 5
+
+
+def test_fallback_report_propagates_reason_formatting_exception():
+    class InvalidReason:
+        def __str__(self):
+            raise RuntimeError("cannot format reason")
+
+    with pytest.raises(RuntimeError, match="cannot format reason"):
+        _fallback_report("예비", InvalidReason())
