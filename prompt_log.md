@@ -1,6 +1,3 @@
-<<<<<<< HEAD
----
-
 ## [payback] simulate_payback · calc_payback_months — 2026-11-02
 
 - **작성자:** 오채윤
@@ -95,7 +92,7 @@ calc_payback_months: (15000, 200) → 75.0 / (15000, 0) → NaN / (15000, -5) �
     - 경계: 월 순이익이 0 이하이면 회수 기간 NaN, `uncertain=True`
     - 예외: 평균매출 없음·음수 입력 시 `ValueError`
     - 회귀: `user_input` 키 누락 시 `ValueError("입력 누락")`
-=======
+---
 ## [data_loader] load_csv_table — 2026-11-02
 
 - **작성자:** 김리나
@@ -324,4 +321,3 @@ calc_payback_months: (15000, 200) → 75.0 / (15000, 0) → NaN / (15000, -5) �
     - 정상: 선택 지역의 평균매출 반환
     - 경계: 선택 지역 데이터가 없으면 전국 평균매출 반환
     - 예외: 지역 평균매출과 전국 평균매출을 모두 사용할 수 없으면 `ValueError` 발생
->>>>>>> origin/main
