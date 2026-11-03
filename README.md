@@ -1,7 +1,7 @@
 ## 테스트 결과
 
 
-(1) data_loader.py
+(1) data_loader.py (담당자: 김리나)
 
 pytest를 사용하여 data_loader.py의 백엔드 3개 함수의 정상·경계·예외 테스트를 검증했습니다.
 
