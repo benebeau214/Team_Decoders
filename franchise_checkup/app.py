@@ -693,9 +693,16 @@ def main() -> None:
             3. 메인 콘텐츠 영역
         ========================================= */
 
-        .main .block-container {
-            max-width: 1180px;
-            padding-top: 1.5rem;
+        .main .block-container,
+        [data-testid="stMainBlockContainer"] {
+            width: 100%;
+            max-width: 1120px;
+            margin-left: auto;
+            margin-right: auto;
+            box-sizing: border-box;
+
+            /* 상단 헤더와 제목이 겹치지 않도록 여백 확보 */
+            padding-top: 4rem;
             padding-bottom: 3rem;
             padding-left: 2rem;
             padding-right: 2rem;
@@ -719,6 +726,14 @@ def main() -> None:
             padding-bottom: 2rem;
         }
 
+        @media (min-width: 769px) {
+            section[data-testid="stSidebar"] {
+                width: 310px !important;
+                min-width: 310px !important;
+                max-width: 310px !important;
+            }
+        }
+
         /* =========================================
            5. 제목 및 본문
         ========================================= */
@@ -734,7 +749,7 @@ def main() -> None:
 
         .stApp h2 {
             color: #172B4D !important;
-            font-size: 1.3rem;
+            font-size: 1.5rem;
             font-weight: 700;
             margin-top: 1.8rem;
             margin-bottom: 0.8rem;
@@ -779,11 +794,32 @@ def main() -> None:
            7. 카드 및 컨테이너
         ========================================= */
 
-        [data-testid="stVerticalBlockBorderWrapper"] {
+        .main [data-testid="stVerticalBlockBorderWrapper"] {
             background-color: #FFFFFF !important;
-            border: 1px solid #E2E8F0 !important;
+            border: 1px solid #E2E8F0 !important;                
             border-radius: 0.75rem !important;
+
+            /* 카드 내부 여백 */
+            padding: 1rem !important;
+                                            
+            /* 카드 아래쪽 간격 */
+            margin-bottom: 0.8rem !important;
+
             box-shadow: none !important;
+        }
+
+        .main [data-testid="stHorizontalBlock"] {
+            gap: 1.1rem !important;
+        }
+
+        .main [data-testid="stVerticalBlock"] {
+            gap: 0.8rem !important;
+        }
+
+        .main [data-testid="stAlert"] {
+            margin-top: 0.5rem !important;                    
+            margin-bottom: 0.7rem !important;
+            border-radius: 0.65rem !important;
         }
 
         /* =========================================
@@ -846,10 +882,13 @@ def main() -> None:
         ========================================= */
 
         @media (max-width: 768px) {
-            .main .block-container {
+            .main .block-container,
+            [data-testid="stMainBlockContainer"] {
+                max-width: 100%;
                 padding-left: 1rem;
                 padding-right: 1rem;
-                padding-top: 1rem;
+                padding-top: 3rem;
+                padding-bottom: 2rem;
             }
 
             .stApp h1 {
