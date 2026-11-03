@@ -1,6 +1,6 @@
 import pytest
 
-from cross_check_documents import cross_check_documents
+from functions.cross_check_documents import cross_check_documents
 
 
 def _deal():

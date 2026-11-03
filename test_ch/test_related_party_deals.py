@@ -3,7 +3,7 @@
 import json
 
 
-from extract_related_party_deals import extract_related_party_deals
+from functions.extract_related_party_deals import extract_related_party_deals
 
 
 def test_normal_valid_deal():

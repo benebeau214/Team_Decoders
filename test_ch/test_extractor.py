@@ -1,6 +1,6 @@
 import json
 
-from extract_unfavorable_clauses import extract_unfavorable_clauses
+from functions.extract_unfavorable_clauses import extract_unfavorable_clauses
 
 
 ALLOWED_TYPES = {
