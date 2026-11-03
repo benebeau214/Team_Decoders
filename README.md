@@ -1,28 +1,28 @@
 ## 테스트 결과
 
 
-(1) data_loader.py
+(1) data_loader.py (담당자: 김리나)
 
 pytest를 사용하여 data_loader.py의 백엔드 3개 함수의 정상·경계·예외 테스트를 검증했습니다.
 
 - 테스트 실행 명령어: `python -m pytest tests/test_data_loader.py -v`
 - 실행 결과: tests/data_loader_pytest_result.txt
 
-(2) payback.py
+(2) payback.py (담당자: 오채윤)
 
 pytest를 사용하여 payback.py의 백엔드 2개 함수(calc_payback_months, simulate_payback)의 정상·경계·예외 테스트와 코드 리딩에서 발견한 결함의 회귀 테스트를 검증했습니다.
 
 - 테스트 실행 명령어: `python -m pytest tests/test_payback.py -v`
 - 실행 결과: tests/payback_pytest_result.txt
 
-(3) signals.py
+(3) signals.py (담당자: 최영효 (yhyhoii))
 
 pytest를 사용하여 signals.py의 백엔드 3개 함수(calc_financial_ratios, calc_termination_rate, judge_risk_signals)의 정상·경계·예외 테스트, 계산→판정 연결 테스트, 코드 리딩에서 발견한 결함(NaN이 "정상"으로 판정됨, 숫자가 아닌 값에서 TypeError 발생)의 회귀 테스트를 검증했습니다.
 
 - 테스트 실행 명령어: `python -m pytest tests/test_signals.py -v`
 - 실행 결과: tests/signals_pytest_result.txt
 
-(4) llm_tasks.py write_report 관련
+(4) llm_tasks.py write_report 관련 (담당자: 이혜원(hyeonwlee))
 
 pytest를 사용하여 llm_tasks.py의 보고서 생성 함수(write_report)와 보조 함수(_json_safe, _analysis_prompt, _fallback_report)의 정상·경계·예외 테스트 및 공통 LLM mock 연동 테스트를 검증했습니다.
 
