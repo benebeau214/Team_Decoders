@@ -1,0 +1,26 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.1.1, pluggy-1.7.0 -- C:\ai-studio\ai-studio-week02\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\ai-studio\Team_Decoders
+collecting ... collected 18 items
+
+tests/test_signals.py::test_t06_normal_all_risky PASSED                  [  5%]
+tests/test_signals.py::test_t07_normal_mixed PASSED                      [ 11%]
+tests/test_signals.py::test_t08_boundary_exact_threshold PASSED          [ 16%]
+tests/test_signals.py::test_t09_missing_values_are_check_needed PASSED   [ 22%]
+tests/test_signals.py::test_t10_empty_ratios_raises PASSED               [ 27%]
+tests/test_signals.py::test_t11_nan_is_check_needed PASSED               [ 33%]
+tests/test_signals.py::test_ratios_normal PASSED                         [ 38%]
+tests/test_signals.py::test_ratios_not_rounded PASSED                    [ 44%]
+tests/test_signals.py::test_ratios_boundary_capital_impairment PASSED    [ 50%]
+tests/test_signals.py::test_ratios_boundary_full_impairment PASSED       [ 55%]
+tests/test_signals.py::test_ratios_missing_values_are_none PASSED        [ 61%]
+tests/test_signals.py::test_ratios_not_dict_raises PASSED                [ 66%]
+tests/test_signals.py::test_rate_normal PASSED                           [ 72%]
+tests/test_signals.py::test_rate_boundary_zero_stores PASSED             [ 77%]
+tests/test_signals.py::test_rate_missing_or_negative_is_none PASSED      [ 83%]
+tests/test_signals.py::test_rate_not_dict_raises PASSED                  [ 88%]
+tests/test_signals.py::test_full_impairment_flows_to_judge PASSED        [ 94%]
+tests/test_signals.py::test_regression_non_numeric_is_none PASSED        [100%]
+
+============================= 18 passed in 0.05s ==============================
