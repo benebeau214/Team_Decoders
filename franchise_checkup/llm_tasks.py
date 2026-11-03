@@ -69,6 +69,7 @@ def _analysis_prompt(
     audience = USER_TYPE_FOCUS[user_type]
 
     return (
+        """<report_text>"""
         "당신은 프랜차이즈 재무·계약 분석 결과를 비전문가가 이해하기 쉽게 설명합니다.\n"
         f"사용자 유형: {user_type}\n"
         f"설명 초점: {audience}\n"

@@ -3,6 +3,8 @@ import json
 import pandas as pd
 import pytest
 
+from llm_client import llm_call as shared_mock_llm_call
+
 from franchise_checkup.llm_tasks import (
     DISCLAIMER,
     _analysis_prompt,
@@ -203,6 +205,7 @@ def test_analysis_prompt_includes_serialized_analysis_and_audience():
         "예비",
     )
 
+    assert prompt.startswith("<report_text>")
     assert "사용자 유형: 예비" in prompt
     assert '"item": "영업이익률"' in prompt
     assert '"scenario": "평균"' in prompt
@@ -244,3 +247,53 @@ def test_fallback_report_propagates_reason_formatting_exception():
 
     with pytest.raises(RuntimeError, match="cannot format reason"):
         _fallback_report("예비", InvalidReason())
+
+@pytest.mark.parametrize(
+    ("user_type", "expected_checklist"),
+    [
+        (
+            "예비",
+            "계약 전 최신 재무자료와 정보공개서의 기재 내용을 확인하세요.",
+        ),
+        (
+            "기존",
+            "최근 재무 신호와 판정 근거의 변화를 확인하세요.",
+        ),
+    ],
+)
+def test_write_report_with_shared_mock(user_type, expected_checklist):
+    result = write_report(
+        signals=[
+            {
+                "item": "부채비율",
+                "level": "주의",
+                "value": 250,
+                "reason": "부채비율이 높은 수준입니다.",
+            }
+        ],
+        payback_df=pd.DataFrame(
+            [
+                {
+                    "scenario": "평균",
+                    "monthly_net_profit": 100,
+                    "payback_months": 50,
+                    "uncertain": False,
+                }
+            ]
+        ),
+        flags=[
+            {
+                "issue": "문서 불일치",
+                "evidence": "자료 간 기재 내용이 다름",
+            }
+        ],
+        user_type=user_type,
+        llm_call=shared_mock_llm_call,
+    )
+
+    assert isinstance(result["summary"], str)
+    assert "데모용 고정 응답" in result["summary"]
+    assert DISCLAIMER in result["summary"]
+
+    assert isinstance(result["checklist"], list)
+    assert expected_checklist in result["checklist"]
