@@ -288,11 +288,167 @@ def _safe_clause_review_flags(clause_text, extractor, call_llm):
         return [{"issue": "불리한 계약 조항 추출 실패", "evidence": "원문을 확인해 주세요."}]
 
 
+def _render_signal_cards(signals: list[dict[str, Any]]) -> None:
+    st.subheader("03 · 본사 재무·계약 신호")
+    st.caption("각 신호는 기존 재무비율 및 위험 판정 결과를 그대로 표시합니다.")
+    columns = st.columns(2)
+    for index, item in enumerate(signals):
+        with columns[index % len(columns)]:
+            with st.container(border=True):
+                st.markdown(f"**{item.get('item', '지표')}**")
+                level = str(item.get("level", "확인 필요"))
+                value = item.get("value")
+                suffix = "%" if item.get("item") in {"부채비율", "영업이익률", "계약 해지율"} else ""
+                st.metric("실제 계산값", _format_value(value, suffix))
+                if level == "정상":
+                    st.success(f"위험 수준 · {level}")
+                elif level == "주의":
+                    st.warning(f"위험 수준 · {level}")
+                elif level == "위험":
+                    st.error(f"위험 수준 · {level}")
+                else:
+                    st.info(f"위험 수준 · {level}")
+                st.caption("판정 근거")
+                st.write(item.get("reason") or "제공된 판정 근거가 없습니다.")
+
+
+def _review_category(flag: dict[str, Any]) -> str:
+    issue = str(flag.get("issue", ""))
+    if "특수관계자" in issue or "관계자 거래" in issue:
+        return "특수관계자 거래"
+    if "조항" in issue:
+        return "계약 조항"
+    if "불일치" in issue or "다릅" in issue or "일치하지" in issue:
+        return "문서 불일치"
+    if "누락" in issue or "자료" in issue or "문서" in issue:
+        return "자료 누락"
+    if "추출" in issue or "실패" in issue or "계산" in issue:
+        return "추출·계산 확인"
+    return "기준연도·기타 확인"
+
+
+def _render_review_flags(flags: list[dict[str, Any]]) -> None:
+    st.subheader("05 · 확인 필요 목록")
+    if not flags:
+        st.info(
+            "확인 필요 항목이 수집되지 않았습니다. 이는 안전 판정이 아닙니다. "
+            "자료 누락이나 추출 결과가 없는 경우에도 목록이 비어 있을 수 있으니 원문과 자료 범위를 확인하세요."
+        )
+        return
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for flag in flags:
+        groups.setdefault(_review_category(flag), []).append(flag)
+    for category, items in groups.items():
+        st.markdown(f"**{category} · {len(items)}건**")
+        for index, flag in enumerate(items, start=1):
+            title = str(flag.get("issue") or "확인할 사항")
+            with st.expander(f"{index}. {title}", expanded=False):
+                st.markdown("**근거**")
+                st.write(flag.get("evidence") or "제공된 근거가 없습니다.")
+                if flag.get("quote"):
+                    st.markdown("**원문 인용**")
+                    st.write(flag["quote"])
+
+
+def _render_payback_section(
+    payback_df: pd.DataFrame | None,
+    avg_sales_info: dict[str, Any] | None,
+    year: int,
+) -> None:
+    st.subheader("04 · 원금 회수 기간")
+    if payback_df is None:
+        st.warning(
+            "회수 기간을 계산하지 못했습니다. 이 영역의 계산에만 영향을 주며 "
+            "위의 재무·계약 신호와 문서 검토 결과는 계속 확인할 수 있습니다."
+        )
+        return
+
+    columns = st.columns(max(1, min(3, len(payback_df))))
+    for index, row in enumerate(payback_df.to_dict(orient="records")):
+        with columns[index % len(columns)]:
+            with st.container(border=True):
+                st.markdown(f"**{row.get('scenario', '시나리오')} 시나리오**")
+                profit = row.get("monthly_net_profit")
+                st.metric("월 순이익 (만원)", _format_value(profit))
+                months = row.get("payback_months")
+                if months is None or pd.isna(months):
+                    st.metric("예상 회수 기간", "산출 불가")
+                    st.warning("불확실 · 월 순이익이 0 이하이므로 회수 기간을 계산할 수 없습니다.")
+                else:
+                    st.metric("예상 회수 기간", f"{months:,.1f}개월")
+                    if bool(row.get("uncertain")):
+                        st.warning("불확실 · 60개월을 초과해 장기 가정에 크게 의존합니다.")
+                    else:
+                        st.success("불확실 여부 · 아니요")
+    chart_df = payback_df.loc[
+        payback_df["payback_months"].notna(), ["scenario", "payback_months"]
+    ].set_index("scenario")
+    if chart_df.empty:
+        st.info("회수 기간이 계산된 시나리오가 없어 차트에서 표시할 값이 없습니다.")
+    else:
+        st.markdown("**회수 기간 비교**")
+        st.bar_chart(
+            chart_df, x_label="시나리오", y_label="회수 기간 (개월)", height=260
+        )
+
+    if avg_sales_info is not None:
+        basis = str(avg_sales_info.get("basis", "확인 필요"))
+        basis_label = "전국 평균" if basis == "전국" else f"{basis} 지역"
+        with st.expander("산출 가정 및 기준 매출", expanded=False):
+            st.caption(
+                f"평균매출 기준: {basis_label} · 기준연도: {year}년 · "
+                "시연 CSV 금액 단위: 만원"
+            )
+            assumption_rows = [
+                {
+                    "시나리오": name,
+                    "매출 계수": values["sales_factor"],
+                    "순이익률": f"{values['margin']:.0%}",
+                }
+                for name, values in PAYBACK_SCENARIOS.items()
+            ]
+            st.dataframe(
+                pd.DataFrame(assumption_rows),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+
+def _render_report(
+    signals: list[dict[str, Any]],
+    payback_df: pd.DataFrame | None,
+    review_flags: list[dict[str, Any]],
+    user_type: str,
+    year: int,
+) -> None:
+    st.subheader("06 · 비전문가용 리포트")
+    st.caption(f"보고서 기준연도: {year}년")
+    try:
+        report = write_report(signals, payback_df, review_flags, user_type, llm_call)
+        with st.container(border=True):
+            st.markdown("**요약**")
+            st.write(report.get("summary", "보고서 요약을 표시할 수 없습니다."))
+        st.markdown("**추가 확인 체크리스트**")
+        checklist = report.get("checklist", [])
+        if checklist:
+            for item in checklist:
+                st.markdown(f"- {item}")
+        else:
+            st.info("추가 확인 체크리스트가 생성되지 않았습니다.")
+    except Exception:
+        logger.exception("Report generation failed")
+        st.warning(
+            "비전문가용 리포트 생성에 실패했습니다. 기존 Python 분석 결과와 "
+            "확인 필요 목록은 계속 확인할 수 있습니다."
+        )
+
+
 def _render_analysis(user_input: dict[str, Any], tables: dict[str, pd.DataFrame]) -> None:
     if _ANALYSIS_IMPORT_ERROR is not None:
         st.error(
-            "분석 모듈을 현재 작업 브랜치에서 불러올 수 없습니다. "
-            f"누락된 모듈 또는 의존성을 확인해 주세요: {_ANALYSIS_IMPORT_ERROR}"
+            "분석 모듈을 불러오지 못했습니다. 누락된 모듈 또는 의존성을 확인해 주세요: "
+            f"{_ANALYSIS_IMPORT_ERROR}"
         )
         return
 
@@ -306,173 +462,175 @@ def _render_analysis(user_input: dict[str, Any], tables: dict[str, pd.DataFrame]
     year_summary = _common_year_summary(financial, disclosure)
     year = year_summary["selected"]
     if year is None:
-        st.error("선택한 브랜드의 재무 자료와 정보공개서에서 일치하는 기준연도를 찾지 못했습니다.")
+        st.error("본사 재무와 정보공개서에서 일치하는 기준연도를 찾지 못했습니다.")
         return
-    audit_latest = _latest_year(_brand_rows(tables["audit_notes.csv"], brand))
-    clauses_latest = _latest_year(_brand_rows(tables["disclosure_clauses.csv"], brand))
-    freshness = _freshness_warnings(
-        year,
-        year_summary["financial_latest"],
-        year_summary["disclosure_latest"],
-        audit_latest,
-        clauses_latest,
-    )
-    for warning in freshness:
-        st.warning(warning)
-    st.subheader(f"분석 기준: {brand} · {year}년")
 
     fin_row = _one_row(tables["hq_financials.csv"], brand, year, "본사 재무")
     disc_row = _one_row(tables["franchise_disclosure.csv"], brand, year, "정보공개서")
     if fin_row is None or disc_row is None:
+        st.warning("기준연도 자료가 불완전해 분석을 진행하지 못했습니다.")
         return
 
-    # Financial and termination signals are independent of LLM extraction.
     ratios = calc_financial_ratios(fin_row)
     termination_rate = calc_termination_rate(disc_row)
     signals = judge_risk_signals(ratios, termination_rate, RISK_THRESHOLDS)
 
-    st.header("① 본사 재무·계약 신호")
-    signal_rows = []
-    for item in signals:
-        suffix = "%" if item["item"] in {"부채비율", "영업이익률", "계약 해지율"} else ""
-        signal_rows.append({
-            "항목": item.get("item", "확인 필요"),
-            "위험 수준": item.get("level", "확인 필요"),
-            "값": _format_value(item.get("value"), suffix),
-            "판정 근거": item.get("reason", "판정 근거가 없습니다."),
-        })
-    st.dataframe(pd.DataFrame(signal_rows), use_container_width=True, hide_index=True)
+    freshness = _freshness_warnings(
+        year,
+        year_summary["financial_latest"],
+        year_summary["disclosure_latest"],
+        _latest_year(_brand_rows(tables["audit_notes.csv"], brand)),
+        _latest_year(_brand_rows(tables["disclosure_clauses.csv"], brand)),
+    )
 
-    review_flags: list[dict[str, Any]] = []
-    review_flags.extend(
+    review_flags: list[dict[str, Any]] = [
         {"issue": "기준연도 최신성 확인", "evidence": warning}
         for warning in freshness
-    )
+    ]
     audit = _one_row(tables["audit_notes.csv"], brand, year, "감사보고서 주석")
     clauses = _one_row(tables["disclosure_clauses.csv"], brand, year, "계약 조항")
     if audit is None:
-        review_flags.append({"issue": "감사보고서 주석 자료 누락", "evidence": f"{year}년 자료가 없어 특수관계자 거래 추출과 교차 점검을 수행하지 못했습니다."})
-    if audit is not None:
+        review_flags.append({
+            "issue": "감사보고서 주석 자료 누락",
+            "evidence": f"{year}년 자료가 없어 특수관계자 거래 추출과 교차 확인을 수행하지 못했습니다.",
+        })
+    else:
         review_flags.extend(_safe_audit_review_flags(
             audit.get("note_text"), disc_row, extract_related_party_deals,
             cross_check_documents, llm_call,
         ))
-
     if clauses is None:
-        review_flags.append({"issue": "정보공개서 계약 조항 자료 누락", "evidence": f"{year}년 자료가 없어 불리한 조항 추출을 수행하지 못했습니다."})
-    if clauses is not None:
+        review_flags.append({
+            "issue": "정보공개서 계약 조항 자료 누락",
+            "evidence": f"{year}년 자료가 없어 불리한 조항 추출을 수행하지 못했습니다.",
+        })
+    else:
         review_flags.extend(_safe_clause_review_flags(
-            clauses.get("clause_text"), extract_unfavorable_clauses, llm_call
+            clauses.get("clause_text"), extract_unfavorable_clauses, llm_call,
         ))
 
-    st.header("② 원금 회수 기간")
     region_rows = _regional_rows(tables["region_sales.csv"], brand, year)
     avg_sales_info: dict[str, Any] | None = None
     payback_df: pd.DataFrame | None = None
     try:
-        avg_sales_info = select_avg_sales(disc_row, region_rows, user_input["region"].strip())
-        payback_input = {key: user_input[key] for key in ("deposit", "key_money", "loan_amount", "loan_rate")}
-        payback_disc = {**disc_row, "avg_annual_sales": avg_sales_info["value"]}
-        payback_df = simulate_payback(payback_disc, payback_input, PAYBACK_SCENARIOS)
-    except Exception:
+        avg_sales_info = select_avg_sales(
+            disc_row, region_rows, user_input["region"].strip()
+        )
+        payback_input = {
+            key: user_input[key]
+            for key in ("deposit", "key_money", "loan_amount", "loan_rate")
+        }
+        payback_disc = {
+            **disc_row,
+            "avg_annual_sales": avg_sales_info["value"],
+        }
+        payback_df = simulate_payback(
+            payback_disc, payback_input, PAYBACK_SCENARIOS
+        )
+    except Exception as error:
         logger.exception("Payback calculation failed")
-        review_flags.append({"issue": "투자 회수 기간 계산 불가", "evidence": "입력 및 매출 자료를 확인해 주세요."})
-        st.warning("투자 회수 기간을 계산할 수 없습니다. 입력 및 매출 자료를 확인해 주세요.")
-
-    if avg_sales_info is not None:
-        basis = avg_sales_info.get("basis", "확인 필요")
-        basis_label = "전국" if basis == "전국" else f"{basis} 지역"
-        st.caption(f"회수 기간 가정 · 평균매출 기준: {basis_label} · 기준연도: {year}년")
-        assumption_rows = [
-            {"시나리오": name, "매출 계수": values["sales_factor"], "순이익률": f"{values['margin']:.0%}"}
-            for name, values in PAYBACK_SCENARIOS.items()
-        ]
-        st.dataframe(pd.DataFrame(assumption_rows), use_container_width=True, hide_index=True)
-    if payback_df is not None:
-        display_df = payback_df.copy()
-        display_df["payback_months"] = display_df["payback_months"].map(
-            lambda value: "회수 불가" if pd.isna(value) else f"{value:,.1f}개월"
-        )
-        display_df["monthly_net_profit"] = payback_df["monthly_net_profit"].map(lambda value: f"{value:,.1f}")
-        display_df["uncertain"] = payback_df["uncertain"].map(lambda value: "불확실" if value else "아니오")
-        display_df = display_df.rename(columns={
-            "scenario": "시나리오", "monthly_net_profit": "월 순이익 (화폐 단위 미확인)", "payback_months": "예상 회수 기간", "uncertain": "불확실 여부",
+        review_flags.append({
+            "issue": "투자 회수 기간 계산 확인 필요",
+            "evidence": "입력값과 기준연도 매출 자료를 확인해 주세요.",
         })
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
-        chart_df = payback_df.loc[payback_df["payback_months"].notna(), ["scenario", "payback_months"]].set_index("scenario")
-        if not chart_df.empty:
-            st.bar_chart(chart_df)
-        else:
-            st.info("양수 월 순이익이 없어 회수 기간 차트를 표시할 수 없습니다.")
-        for row in payback_df.to_dict(orient="records"):
-            if row.get("uncertain"):
-                period = "회수 불가" if pd.isna(row.get("payback_months")) else f"{row['payback_months']:,.1f}개월"
-                st.warning(f"{row['scenario']}: 월 순이익 {row['monthly_net_profit']:,.1f} (화폐 단위 미확인), 회수 기간 {period} — 60개월 초과 또는 회수 불가로 불확실합니다.")
 
-    st.header("③ 확인 필요 목록")
-    if not review_flags:
-        st.info("추가 확인 항목이 수집되지 않았습니다. 일부 자료가 누락되었거나 추출 결과가 없을 수 있으므로 문서 원문을 별도로 확인하세요.")
-    for flag in review_flags:
+    basis = avg_sales_info.get("basis", "확인 필요") if avg_sales_info else "확인 필요"
+    basis_label = "전국 평균" if basis == "전국" else f"{basis} 기준"
+    st.subheader("01 · 검진 대상 요약")
+    summary_values = [
+        ("브랜드", brand),
+        ("지역", user_input["region"]),
+        ("분석 기준연도", f"{year}년"),
+        ("평균매출 기준", basis_label),
+        ("사용자 유형", user_input["user_type"]),
+    ]
+    for offset, count in ((0, 3), (3, 2)):
+        columns = st.columns(count)
+        for column, (label, value) in zip(columns, summary_values[offset:offset + count]):
+            with column:
+                with st.container(border=True):
+                    st.caption(label)
+                    st.write(value)
+
+    st.subheader("02 · 자료 최신성 및 분석 기준")
+    if freshness:
         with st.container(border=True):
-            st.markdown(f"**확인할 사항:** {flag.get('issue', '확인 필요')}")
-            st.markdown(f"**근거:** {flag.get('evidence', '자료 또는 근거가 없습니다.')}")
-            if flag.get("quote"):
-                st.markdown(f"> **원문 인용:** {flag['quote']}")
-
-    st.header("④ 비전문가용 리포트")
-    st.caption(f"이 보고서는 {year}년 자료를 기준으로 작성되었습니다.")
-    try:
-        report = write_report(signals, payback_df, review_flags, user_input["user_type"], llm_call)
-        st.write(report.get("summary", "보고서 요약을 제공할 수 없습니다."))
-        st.markdown("**추가 확인 체크리스트**")
-        for item in report.get("checklist", []):
-            st.markdown(f"- {item}")
-    except Exception:
-        logger.exception("Report generation failed")
-        st.warning("보고서 생성에 실패했습니다. 위 파이썬 분석 결과를 확인해 주세요.")
-
-    st.info("본 서비스는 정보 제공 목적이며, 법률·투자 자문이 아닙니다.")
-
-
-def main() -> None:
-    st.set_page_config(page_title="프랜차이즈 본사 재무 건강검진", layout="wide")
-    st.title("프랜차이즈 본사 재무 건강검진")
-    st.caption("공개 자료 기반의 참고 정보입니다. 분석 결과는 선택한 기준연도에 따라 달라질 수 있습니다.")
-    try:
-        tables = _load_tables(str(PROJECT_ROOT))
-    except (FileNotFoundError, OSError, ValueError, ImportError) as error:
-        st.error(f"데이터 파일을 읽을 수 없습니다: {error}")
-        st.info("5개 CSV를 프로젝트 루트 또는 data/ 폴더에 두고, 표준 열 이름과 UTF-8/CP949 인코딩을 확인하세요.")
-        st.info("필수 CSV: " + ", ".join(CSV_NAMES))
-        return
-
-    brands = _common_brands(tables["hq_financials.csv"], tables["franchise_disclosure.csv"])
-    region_table = tables["region_sales.csv"]
-    regions = sorted(set(value.strip() for value in region_table["region"].dropna().astype(str) if value.strip()))
-    if not brands or not regions:
-        st.error("브랜드 또는 시도 목록을 만들 수 없습니다. CSV 자료를 확인하세요.")
-        return
-
-    with st.form("health_check_form"):
-        st.warning(
-            "프로젝트 설계 문서와 회수 계산 테스트에는 원·만원 등 화폐 단위가 명시되어 있지 않고, "
-            "현재 저장소에도 실제 CSV가 없습니다. 금액 단위를 확인할 때까지 변환하지 않으며, "
-            "아래 입력 금액과 CSV 금액이 같은 단위인지 먼저 확인해 주세요."
+            for warning in freshness:
+                st.warning(warning)
+    else:
+        st.caption(
+            f"{year}년을 본사 재무와 정보공개서의 공통 기준연도로 사용했습니다. "
+            f"평균매출 기준은 {basis_label}입니다."
         )
-        col1, col2 = st.columns(2)
-        brand = col1.selectbox("브랜드", brands)
-        region = col2.selectbox("지역(시도)", regions)
-        col3, col4, col5 = st.columns(3)
-        deposit = col3.number_input(_money_input_label("보증금"), min_value=0.0, step=100.0)
-        key_money = col4.number_input(_money_input_label("권리금"), min_value=0.0, step=100.0)
-        loan_amount = col5.number_input(_money_input_label("대출금"), min_value=0.0, step=100.0)
-        loan_rate = st.number_input("대출 금리(연 %)", min_value=0.0, max_value=100.0, step=0.1)
-        user_type = st.radio("사용자 유형", ["예비", "기존"], horizontal=True)
-        submitted = st.form_submit_button("분석 실행", type="primary")
 
-    if submitted:
+    st.divider()
+    _render_signal_cards(signals)
+
+    st.divider()
+    _render_payback_section(payback_df, avg_sales_info, year)
+
+    st.divider()
+    _render_review_flags(review_flags)
+
+    st.divider()
+    _render_report(
+        signals, payback_df, review_flags, user_input["user_type"], year
+    )
+    st.caption("본 서비스는 정보 제공 목적이며, 법률·투자 자문이 아닙니다.")
+
+
+def _render_header() -> None:
+    st.title("프랜차이즈 본사 재무 건강검진")
+    st.markdown(
+        "공개 자료 기반으로 본사 재무·계약 위험과 예상 투자 회수 기간을 점검합니다."
+    )
+    st.caption(
+        "이 화면은 제출된 자료와 기존 분석 규칙에 따른 참고 정보입니다. "
+        "자료의 범위와 기준연도에 따라 결과가 달라질 수 있으며, 원문 자료를 함께 확인해 주세요."
+    )
+
+
+def _render_input_form(brands: list[str], regions: list[str]) -> dict[str, Any] | None:
+    with st.sidebar:
+        st.header("검진 조건 설정")
+        st.caption("브랜드와 지역, 투자 조건을 선택하세요.")
+        with st.form("health_check_form"):
+            st.markdown("**검진 대상**")
+            brand = st.selectbox("브랜드", brands)
+            region = st.selectbox("지역 (시도)", regions)
+
+            st.markdown("**투자 조건**")
+            st.caption(
+                "금액 단위: 만원 (현재 시연 CSV 기준). 실제 자료로 교체할 때는 "
+                "원자료 단위를 확인하고 같은 단위로 입력하세요."
+            )
+            deposit = st.number_input(
+                "보증금", min_value=0.0, step=100.0, format="%.0f"
+            )
+            key_money = st.number_input(
+                "권리금", min_value=0.0, step=100.0, format="%.0f"
+            )
+            loan_amount = st.number_input(
+                "대출금", min_value=0.0, step=100.0, format="%.0f"
+            )
+            loan_rate = st.number_input(
+                "대출 금리 (연 %)",
+                min_value=0.0,
+                max_value=100.0,
+                step=0.1,
+                format="%.1f",
+            )
+
+            st.markdown("**사용자 유형**")
+            user_type = st.radio("사용자 유형", ["예비", "기존"], horizontal=True)
+            submitted = st.form_submit_button(
+                "분석 실행", type="primary", use_container_width=True
+            )
+
+        if not submitted:
+            return None
         try:
-            validated = validate_user_input({
+            return validate_user_input({
                 "brand": brand,
                 "region": region,
                 "deposit": deposit,
@@ -483,8 +641,264 @@ def main() -> None:
             })
         except (ValueError, ImportError) as error:
             st.error(f"입력값을 확인해 주세요: {error}")
-            return
-        _render_analysis(validated, tables)
+            return {}
+
+
+def main() -> None:
+    st.set_page_config(
+        page_title="프랜차이즈 본사 재무 건강검진",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+    
+    st.html(
+        """
+        <style>
+        /* =========================================
+           1. 전체 페이지 기본 설정
+        ========================================= */
+
+        :root {
+            color-scheme: light;
+        }
+
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"] {
+            background-color: #FFFFFF !important;
+            color: #24324A !important;
+        }
+
+        /* =========================================
+           2. 상단 헤더 및 툴바
+        ========================================= */
+
+        header[data-testid="stHeader"],
+        [data-testid="stHeader"],
+        .stAppHeader {
+            background-color: #FFFFFF !important;
+            border-bottom: 1px solid #E8ECF2 !important;
+            box-shadow: none !important;
+        }
+
+        [data-testid="stToolbar"] {
+            background-color: transparent !important;
+        }
+
+        [data-testid="stDecoration"] {
+            background-color: #D95D59 !important;
+        }
+
+        /* =========================================
+            3. 메인 콘텐츠 영역
+        ========================================= */
+
+        .main .block-container {
+            max-width: 1180px;
+            padding-top: 1.5rem;
+            padding-bottom: 3rem;
+            padding-left: 2rem;
+            padding-right: 2rem;
+        }
+
+        /* =========================================
+           4. 사이드바
+        ========================================= */
+
+        [data-testid="stSidebar"] {
+            background-color: #F8FAFC !important;
+            border-right: 1px solid #E2E8F0 !important;
+        }
+
+        [data-testid="stSidebar"] > div:first-child {
+            background-color: #F8FAFC !important;
+        }
+
+        [data-testid="stSidebar"] .block-container {
+            padding-top: 1.5rem;
+            padding-bottom: 2rem;
+        }
+
+        /* =========================================
+           5. 제목 및 본문
+        ========================================= */
+
+        .stApp h1 {
+            color: #172B4D !important;
+            font-size: 1.85rem;
+            font-weight: 750;
+            line-height: 1.35;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        .stApp h2 {
+            color: #172B4D !important;
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-top: 1.8rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .stApp h3 {
+            color: #24324A !important;
+            font-size: 1.05rem;
+            font-weight: 650;
+        }
+
+        .stApp p,
+        .stApp label,
+        .stApp [data-testid="stCaptionContainer"] {
+            color: #475569 !important;
+            line-height: 1.65;
+        }
+
+        /* =========================================
+           6. 입력 위젯
+        ========================================= */
+
+        .stApp input,
+        .stApp textarea,
+        .stApp [data-baseweb="select"] > div {
+            background-color: #FFFFFF !important;
+            color: #24324A !important;
+            border-color: #CBD5E1 !important;
+        }
+
+        [data-testid="stNumberInput"] button {
+            background-color: #F1F5F9 !important;
+            color: #334155 !important;
+            border-color: #CBD5E1 !important;
+        }
+
+        [data-testid="stNumberInput"] button:hover {
+            background-color: #E2E8F0 !important;
+        }
+
+        /* =========================================
+           7. 카드 및 컨테이너
+        ========================================= */
+
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 0.75rem !important;
+            box-shadow: none !important;
+        }
+
+        /* =========================================
+           8. 데이터프레임 및 표
+        ========================================= */
+
+        [data-testid="stDataFrame"],
+        [data-testid="stTable"] {
+            background-color: #FFFFFF !important;
+            color: #24324A !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 0.65rem !important;
+            overflow: hidden;
+        }
+
+        /* =========================================
+           9. 차트 영역
+            차트 내부 색상은 config.toml 테마를 따름
+        ========================================= */
+
+        [data-testid="stVegaLiteChart"],
+        [data-testid="stArrowVegaLiteChart"],
+        [data-testid="stPlotlyChart"] {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 0.75rem !important;
+            padding: 0.5rem;
+        }
+
+        /* =========================================
+           10. 구분선 및 안내 문구
+        ========================================= */
+
+        .stApp hr {
+            border-color: #E8ECF2 !important;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        [data-testid="stAlert"] {
+            border-radius: 0.65rem !important;
+        }
+
+        [data-testid="stCaptionContainer"] {
+            font-size: 0.83rem;
+        }
+
+        /* =========================================
+           11. 버튼
+        ========================================= */
+
+        .stApp button[kind="primary"] {
+            border-radius: 0.55rem !important;
+            font-weight: 650 !important;
+            min-height: 2.7rem;
+        }
+
+        /* =========================================
+           12. 반응형 레이아웃
+        ========================================= */
+
+        @media (max-width: 768px) {
+            .main .block-container {
+                padding-left: 1rem;
+                padding-right: 1rem;
+                padding-top: 1rem;
+            }
+
+            .stApp h1 {
+                font-size: 1.5rem;
+            }
+
+            .stApp h2 {
+                font-size: 1.15rem;
+            }
+        }
+        </style>
+        """
+    )
+
+    _render_header()
+
+    try:
+        tables = _load_tables(str(PROJECT_ROOT))
+    except (FileNotFoundError, OSError, ValueError, ImportError) as error:
+        st.error(f"데이터를 불러올 수 없습니다: {error}")
+        with st.container(border=True):
+            st.markdown("**데이터 확인 사항**")
+            st.write("필수 CSV를 프로젝트 루트의 data/에 두고, 열 이름과 UTF-8/CP949 인코딩을 확인하세요.")
+            st.caption("필수 파일: " + ", ".join(CSV_NAMES))
+        return
+
+    brands = _common_brands(
+        tables["hq_financials.csv"], tables["franchise_disclosure.csv"]
+    )
+    regions = sorted({
+        value.strip()
+        for value in tables["region_sales.csv"]["region"].dropna().astype(str)
+        if value.strip()
+    })
+    if not brands or not regions:
+        st.error("브랜드 또는 지역 선택 자료가 없습니다. CSV 내용을 확인하세요.")
+        return
+
+    selected = _render_input_form(brands, regions)
+    if selected is None:
+        st.subheader("분석을 시작하려면")
+        st.write(
+            "왼쪽 **검진 조건 설정**에서 브랜드와 지역을 고르고 투자 금액을 입력한 뒤 "
+            "**분석 실행**을 선택하세요. 결과는 기준연도별 자료와 세 가지 회수 가정으로 표시됩니다."
+        )
+        return
+    if not selected:
+        return
+    _render_analysis(selected, tables)
 
 
 if __name__ == "__main__":
