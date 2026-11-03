@@ -3,7 +3,7 @@ import json
 import pandas as pd
 import pytest
 
-from llm_client import llm_call as shared_mock_llm_call
+from llm_client import LLMCallError, llm_call as shared_mock_llm_call
 
 from franchise_checkup.llm_tasks import (
     DISCLAIMER,
@@ -482,3 +482,15 @@ def test_t16_nonexistent_quote():
         "items": [],
         "dropped": 1,
     }
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, TimeoutError, LLMCallError])
+@pytest.mark.parametrize("extractor, expected", [
+    (extract_related_party_deals, {"status": "llm_error", "items": []}),
+    (extract_unfavorable_clauses, {"status": "llm_error", "items": [], "dropped": 0}),
+])
+def test_extractors_return_llm_error_on_call_failure(extractor, expected, error_type):
+    def failing_call(prompt):
+        raise error_type("테스트 호출 오류")
+
+    assert extractor("분석할 원문", failing_call) == expected
