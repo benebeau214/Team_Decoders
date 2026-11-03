@@ -15,6 +15,40 @@ def llm_call(prompt: str) -> str:
     실제 API 연결 시 타임아웃과 제한된 재시도를 설정하고,
     SDK의 호출 예외는 raise LLMCallError(...) from exc로 변환한다.
     """
+
+    # 1. 보고서 작성 요청
+    if prompt.lstrip().startswith("<report_text>"):
+
+        if "사용자 유형: 예비" in prompt:
+            checklist = [
+                "계약 전 최신 재무자료와 정보공개서의 기재 내용을 확인하세요.",
+                "계약 조건과 필수품목 지정·구매 조건을 원문으로 확인하세요.",
+                "투자금과 예상 투자 회수 기간의 가정을 점검하세요.",
+            ]
+
+        elif "사용자 유형: 기존" in prompt:
+            checklist = [
+                "최근 재무 신호와 판정 근거의 변화를 확인하세요.",
+                "계약 갱신·추가 출점 전에 변경된 조건을 확인하세요.",
+                "실제 매출·비용과 투자 회수 시나리오의 차이를 점검하세요.",
+            ]
+
+        else:
+            raise ValueError("지원하지 않는 사용자 유형입니다.")
+
+        mock_response = {
+            "summary": (
+                "현재 응답은 보고서 작성 기능의 동작을 확인하기 위한 "
+                "데모용 고정 응답입니다. "
+                "입력된 재무·문서 자료를 실제로 분석한 결과가 아니므로, "
+                "화면에 표시된 분석 결과를 직접 확인해야 합니다."
+            ),
+            "checklist": checklist,
+        }
+
+        return json.dumps(mock_response, ensure_ascii=False)
+
+    # 2. 특수관계자 거래 추출 요청
     if "<note_text>" in prompt:
         return json.dumps(
             {"items": [{
@@ -26,6 +60,8 @@ def llm_call(prompt: str) -> str:
             }]},
             ensure_ascii=False,
         )
+
+    # 3. 불리한 계약 조항 추출 요청
     if "<clause_text>" not in prompt:
         raise ValueError("지원하지 않는 mock 요청입니다.")
 

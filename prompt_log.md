@@ -777,3 +777,136 @@ disc_row: 정보공개서에서 추출한 거래 한 행.
     - 예외: 정보 없음·음수 → None/"NA", dict가 아닌 입력 → `ValueError`
     - 연결: 완전잠식 본사의 계산 결과가 `judge_risk_signals`에서 부채비율 '확인 필요', 자본잠식 '위험'으로 판정
     - 회귀: 숫자가 아닌 값 → None, 다른 지표는 영향 없음
+
+---
+
+## [llm_report]  — 2026-11-03
+
+- **작성자:** 이혜원
+- **사용 도구:** GitHub Copilot Chat
+- **프롬프트:**
+    ```
+    당신은 파이썬 백엔드 개발을 돕는 어시스턴트입니다. 프랜차이즈 예비 가맹점주를 위한 본사 재무·계약 위험 분석 서비스의 비전문가용 리포트 생성 함수를 구현해 주세요.
+    
+    [함수 시그니처 - 변경 금지]
+    def write_report(signals, payback_df, flags, user_type, llm_call) -> dict:
+    
+    [입력 명세]
+    ※ 각 입력의 구체적인 자료형과 내부 구조는 추후 확정 예정이므로, 설계 문서와 기존 코드를 확인하고 임의로 스키마를 확정하지 마세요.
+    - `signals`: 본사 재무·계약 위험 신호 목록 (`judge_risk_signals` 결과)
+    - `payback_df`: 보수·평균·낙관 시나리오별 회수 기간 DataFrame (`simulate_payback` 결과)
+    - `flags`: 문서 간 불일치 및 주의가 필요한 계약 조항 관련 결과 (`cross_check_documents` 및 LLM 조항 추출 함수의 결과)
+    - `user_type`: 사용자 유형 (`"예비"` 또는 `"기존"`)
+    - `llm_call`: 프롬프트 문자열을 입력받아 LLM 응답 문자열을 반환하는 함수
+    
+    [출력 명세]
+    다음 형식의 딕셔너리를 반환합니다.
+    {"summary": str, "checklist": list[str]}
+    - `summary`: 재무 위험 신호, 회수 기간, 문서 불일치 및 주의 조항을 비전문가가 이해하기 쉬운 한국어 문장으로 요약
+    - `checklist`: 사용자가 추가로 확인해야 할 사항을 구체적인 문장으로 작성
+    - `user_type`에 따라 설명의 초점을 조정
+        - 예비: 가맹 계약 전 위험 및 확인 사항
+        - 기존: 최근 재무 변화, 운영 및 계약 갱신·추가 출점 관련 사항
+        
+    [예외·경계 방침]
+    - 지원하지 않는 `user_type`은 기존 프로젝트 규약을 확인하고, 별도 규약이 없다면 `ValueError`를 발생시킬 것
+    - 입력 데이터가 없거나 일부 값이 결측된 경우 이를 임의로 정상 또는 위험으로 판단하지 말고 '확인 필요'로 구분할 것
+    - 빈 리스트가 검증 완료 후 발견 항목이 없다는 의미일 수 있으므로, 무조건 입력 누락으로 판단하지 말 것
+    - `payback_df` 내부의 `NaN`은 회수 기간을 계산할 수 없는 정상적인 분석 결과일 수 있으므로 DataFrame 전체가 비어 있는 것과 구분할 것
+    - LLM 호출 실패, JSON 파싱 실패, 응답 자료형 및 필수 필드 오류에 대응할 것
+    - LLM 보고서 생성 실패와 기존 Python 분석 실패를 혼동하지 말 것
+    - 대체 보고서를 반환할 때는 자동 보고서 생성 실패 사실과 실패 원인을 명확하게 알리고, 화면에 표시된 기존 분석 결과를 직접 확인하도록 안내할 것
+    
+    [제약 조건]
+    - 기존 프로젝트 의존성만 사용하고 별도 라이브러리를 추가하지 말 것
+    - 타입 힌트와 함수 docstring 작성
+    - 재무 지표 계산, 위험 판정, 회수 기간 계산 및 문서 교차 검증을 중복 구현하지 말 것
+    - LLM에는 기존 함수에서 전달받은 분석 결과만 설명하도록 요청할 것
+    - 입력에 없는 수치, 사실 및 법적 판단을 생성하지 않도록 할 것
+    - LLM 호출은 전달받은 `llm_call`만 사용하고, 실제 API 클라이언트를 새로 생성하지 말 것
+    - 기존 함수 시그니처와 반환 형식을 유지할 것
+    - 보조 함수는 필요한 경우에만 사용하고, 불필요하게 복잡한 입력 검증이나 중복 코드를 만들지 말 것
+    
+    [통과해야 할 테스트]
+    1. 정상 입력에서 `{"summary": str, "checklist": list[str]}` 형식으로 반환되는지 확인
+    2. 사용자 유형에 따라 보고서의 설명 초점이 달라지는지 확인
+    3. 재무 신호, 회수 기간 및 문서 검토 결과가 입력 자료에 근거하는지 확인
+    4. 입력 자료의 부재, 일부 결측 및 정상적인 빈 결과를 구분하는지 확인
+    5. 회수 기간이 `NaN`인 시나리오를 회수 불가 또는 확인 필요로 적절히 설명하는지 확인
+    6. LLM 호출 실패, 잘못된 JSON, 필수 필드 누락 및 잘못된 응답 자료형에 대응하는지 확인
+    7. LLM 보고서 생성에 실패해도 기존 분석 결과의 신뢰성에 문제가 있다고 잘못 안내하지 않는지 확인
+    8. 입력에 없는 수치나 사실을 생성하지 않는지 확인
+    
+    먼저 기존 프로젝트 코드와 설계 문서를 확인한 후 구현하세요. 아직 확정되지 않은 데이터 구조는 임의로 가정하지 말고, 확인이 필요한 사항을 제시하세요. 수정 후 pytest 테스트 코드도 작성해 주세요.
+    ```
+- **생성 코드 위치:** 커밋 `2f2f8be` (수정 전 원본)
+
+- **코드 리딩에서 발견한 결함 및 개선 사항:**
+    - 분석 결과에 Python 및 pandas 자료형이 혼합되어 있어 JSON 직렬화 과정에서 문제가 발생할 가능성이 있음을 확인했다.
+    - 투자 회수 기간의 uncertain 여부, NaN 값 및 빈 DataFrame이 명확히 구분되지 않으면 LLM이 회수 기간을 잘못 해석할 가능성이 있음을 확인했다.
+    - 빈 flags를 문서 검토 결과의 부재나 위험 요소가 없다는 의미로 잘못 해석할 가능성이 있음을 확인했다.
+    - 자동 보고서 생성에 실패했을 때 사용자가 기존 Python 분석 결과를 확인할 수 있도록 안내하는 기능을 보완할 필요가 있음을 확인했다.
+
+- **수정 내역:**
+    - _json_safe(): 중첩 자료형, 결측값 및 DataFrame을 JSON으로 변환하는 로직 개선
+    - _analysis_prompt():
+        - 입력 데이터의 필드와 의미를 구체적으로 설명하도록 프롬프트 개선
+        - uncertain, NaN, 빈 DataFrame을 구분하여 회수 기간의 잘못된 해석 방지
+        - 빈 flags를 자료 누락이나 위험 요소가 없다는 의미로 단정하지 않도록 지침 보완
+    - _fallback_report():
+        - 자동 보고서 생성 실패 시 기존 분석 결과를 직접 확인하도록 안내하는 사용자 유형별 체크리스트 제공
+        - 면책 문구 추가
+
+- **명세 보완 사항:**
+    - write_report()의 입력 및 출력 형식 구체화
+        - signals: 재무 위험 신호별 항목, 위험 수준, 값 및 판정 근거
+        - payback_df: 시나리오별 월 순이익, 투자 회수 기간 및 불확실성 여부
+        - flags: 문서 간 불일치 등의 검토 결과와 근거
+        - user_type: 예비 가맹점사업자(예비)와 기존 가맹점사업자(기존) 구분
+        - 반환값: 보고서 요약(summary)과 확인 사항 목록(checklist)
+    - 결측값과 빈 분석 결과의 의미를 구분하고, 확인되지 않은 정보를 정상으로 간주하지 않도록 처리 기준 보완
+    - LLM 호출 함수의 문자열 입력·문자열 출력 형식과 보고서 응답 JSON 구조 명확화
+    - LLM 호출 또는 응답 파싱 실패 시 기존 분석 결과와 보고서 생성 실패를 구분하도록 예외 처리 기준 보완
+
+- **수정 코드 위치:** 커밋 `ae263b1`
+
+- **테스트 결과:** `pytest 25 pass`
+    - 정상: 유효한 응답의 JSON 파싱 및 보고서 반환, 사용자 유형별 보고서 생성
+    - 경계: 빈 입력, 결측값, 빈 DataFrame 및 NaN 구분, Markdown 형식의 JSON 응답 처리
+    - 예외: 지원하지 않는 사용자 유형, LLM 호출 실패 및 잘못된 응답 형식에 대한 예외 처리와 fallback 반환
+    ```
+    PS C:\Users\emdqn\Workspace\02_projects\2610-2612_franchise-financial-health-check_sg> python -m pytest tests/test_llm_tasks.py -v
+    ================ test session starts =================
+    platform win32 -- Python 3.13.2, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\emdqn\AppData\Local\Programs\Python\Python313\python.exe
+    cachedir: .pytest_cache
+    rootdir: C:\Users\emdqn\Workspace\02_projects\2610-2612_franchise-financial-health-check_sg
+    collected 25 items                                    
+
+    tests/test_llm_tasks.py::test_write_report_returns_required_shape PASSED [  4%]
+    tests/test_llm_tasks.py::test_prompt_focus_changes_by_user_type PASSED [  8%]
+    tests/test_llm_tasks.py::test_unsupported_user_type_raises_value_error[invalid] PASSED [ 12%]
+    tests/test_llm_tasks.py::test_unsupported_user_type_raises_value_error[] PASSED [ 16%]
+    tests/test_llm_tasks.py::test_unsupported_user_type_raises_value_error[None] PASSED [ 20%]
+    tests/test_llm_tasks.py::test_prompt_contains_supplied_financial_payback_and_document_results PASSED [ 24%]
+    tests/test_llm_tasks.py::test_missing_values_are_distinguished_from_empty_results PASSED [ 28%]
+    tests/test_llm_tasks.py::test_empty_payback_dataframe_is_distinguished_from_nan_scenario PASSED [ 32%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-LLM \ud638\ucd9c \uc2e4\ud328] PASSED [ 36%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-JSON \ud30c\uc2f1 \uc2e4\ud328] PASSED [ 40%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-\uc751\ub2f5 \uc790\ub8cc\ud615 \uc624\ub958] PASSED [ 44%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-\ud544\uc218 \ud544\ub4dc \ub204\ub77d] PASSED [ 48%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-\uc790\ub8cc\ud615 \uc624\ub958] PASSED [ 52%]
+    tests/test_llm_tasks.py::test_markdown_fenced_json_is_accepted PASSED [ 56%]
+    tests/test_llm_tasks.py::test_json_safe_converts_nested_values_and_dataframe PASSED [ 60%]
+    tests/test_llm_tasks.py::test_json_safe_handles_empty_dataframe_boundary PASSED [ 64%]
+    tests/test_llm_tasks.py::test_json_safe_preserves_value_when_scalar_conversion_raises PASSED [ 68%]
+    tests/test_llm_tasks.py::test_analysis_prompt_includes_serialized_analysis_and_audience PASSED [ 72%]
+    tests/test_llm_tasks.py::test_analysis_prompt_preserves_empty_and_missing_inputs PASSED [ 76%]
+    tests/test_llm_tasks.py::test_analysis_prompt_rejects_unsupported_user_type PASSED [ 80%]
+    tests/test_llm_tasks.py::test_fallback_report_returns_user_type_specific_checklist PASSED [ 84%]
+    tests/test_llm_tasks.py::test_fallback_report_handles_empty_reason_boundary PASSED [ 88%]
+    tests/test_llm_tasks.py::test_fallback_report_propagates_reason_formatting_exception PASSED [ 92%]
+    tests/test_llm_tasks.py::test_write_report_with_shared_mock[\uc608\ube44-\uacc4\uc57d \uc804 \ucd5c\uc2e0 \uc7ac\ubb34\uc790\ub8cc\uc640 \uc815\ubcf4\uacf5\uac1c\uc11c\uc758 \uae30\uc7ac \ub0b4\uc6a9\uc744 \ud655\uc778\ud558\uc138\uc694.] PASSED [ 96%]
+    tests/test_llm_tasks.py::test_write_report_with_shared_mock[\uae30\uc874-\ucd5c\uadfc \uc7ac\ubb34 \uc2e0\ud638\uc640 \ud310\uc815 \uadfc\uac70\uc758 \ubcc0\ud654\ub97c \ud655\uc778\ud558\uc138\uc694.] PASSED [100%]
+
+    ================= 25 passed in 1.42s =================
+    ```
