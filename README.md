@@ -15,7 +15,7 @@ pytest를 사용하여 payback.py의 백엔드 2개 함수(calc_payback_months, 
 - 테스트 실행 명령어: `python -m pytest tests/test_payback.py -v`
 - 실행 결과: tests/payback_pytest_result.txt
 
-(3) signals.py
+(3) signals.py (담당자: 최영효 (yhyhoii))
 
 pytest를 사용하여 signals.py의 백엔드 3개 함수(calc_financial_ratios, calc_termination_rate, judge_risk_signals)의 정상·경계·예외 테스트, 계산→판정 연결 테스트, 코드 리딩에서 발견한 결함(NaN이 "정상"으로 판정됨, 숫자가 아닌 값에서 TypeError 발생)의 회귀 테스트를 검증했습니다.
 
