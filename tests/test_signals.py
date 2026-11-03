@@ -4,7 +4,12 @@
 """
 import pytest
 
-from franchise_checkup.signals import calc_financial_ratios, calc_termination_rate, judge_risk_signals
+from franchise_checkup.signals import (
+    calc_financial_ratios,
+    calc_termination_rate,
+    judge_risk_signals,
+    cross_check_documents,
+)
 
 
 THRESHOLDS = {"debt_warn": 200, "debt_danger": 400, "term_warn": 10, "term_danger": 20}
@@ -174,3 +179,31 @@ def test_regression_non_numeric_is_none():
     assert result["debt_ratio"] is None
     assert result["op_margin"] == pytest.approx(-5.0)
     assert result["capital_status"] == "정상"
+
+
+def _deal():
+    return {
+        "related_party": "가상유통",
+        "relationship": "종속회사",
+        "transaction_type": "매출",
+        "amount": "100만원",
+    }
+
+
+def test_normal_matching_deal():
+    # 정상: 두 문서의 거래가 같으면 문제 없음
+    assert cross_check_documents([_deal()], _deal()) == []
+
+
+def test_boundary_empty_audit_deals():
+    # 경계: 감사보고서 거래가 0건이면 확인 불가 문제 1건 반환
+    issues = cross_check_documents([], _deal())
+    assert len(issues) == 1
+    assert "감사보고서 주석에서 확인되지 않습니다" in issues[0]["issue"]
+    assert "가상유통" in issues[0]["evidence"]
+
+
+def test_exception_invalid_deals_type():
+    # 예외: 거래 목록에 잘못된 타입을 전달하면 TypeError 발생
+    with pytest.raises(TypeError, match="deals"):
+        cross_check_documents(None, _deal())
