@@ -1,13 +1,17 @@
 """LLM 호출 계층. 현재는 데모용 mock을 사용한다."""
 
 import json
+import os
+
+# Read once at startup; mock mode is the default until the API is connected.
+USE_MOCK = os.getenv("USE_MOCK", "true").strip().lower() in {"true", "1", "yes"}
 
 
 class LLMCallError(Exception):
     """LLM 호출 실패. 실제 API 연결 시 SDK 호출 예외를 이 예외로 변환한다."""
 
 
-def llm_call(prompt: str) -> str:
+def _mock_llm_call(prompt: str) -> str:
     """[MOCK] 요청 종류별 데모용 고정 JSON을 반환한다.
 
     실제 AI 분석은 하지 않는다. 정해진 데모 원문에만 사용하는 mock이다.
@@ -76,3 +80,19 @@ def llm_call(prompt: str) -> str:
     }
 
     return json.dumps(mock_response, ensure_ascii=False)
+
+
+def _real_llm_call(prompt: str) -> str:
+    """Return an API response string; implement timeouts and bounded retries here.
+
+    Read API credentials from environment variables and convert SDK failures to
+    LLMCallError when a provider is connected. Never fall back to mock silently.
+    """
+    raise LLMCallError("Real LLM is not connected yet. Set USE_MOCK=true.")
+
+
+def llm_call(prompt: str) -> str:
+    """Route to mock or real LLM while preserving the string response contract."""
+    if USE_MOCK:
+        return _mock_llm_call(prompt)
+    return _real_llm_call(prompt)
