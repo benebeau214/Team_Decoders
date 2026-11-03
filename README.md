@@ -22,7 +22,7 @@ pytest를 사용하여 signals.py의 백엔드 3개 함수(calc_financial_ratios
 - 테스트 실행 명령어: `python -m pytest tests/test_signals.py -v`
 - 실행 결과: tests/signals_pytest_result.txt
 
-(4) llm_tasks.py write_report 관련
+(4) llm_tasks.py write_report 관련 (담당자: 이혜원(hyeonwlee))
 
 pytest를 사용하여 llm_tasks.py의 보고서 생성 함수(write_report)와 보조 함수(_json_safe, _analysis_prompt, _fallback_report)의 정상·경계·예외 테스트 및 공통 LLM mock 연동 테스트를 검증했습니다.
 
