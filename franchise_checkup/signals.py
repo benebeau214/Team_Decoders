@@ -235,7 +235,7 @@ def _describe_deal(deal: Mapping[str, str]) -> str:
     return ", ".join(f"{field}={deal.get(field, '')!r}" for field in fields)
 
 
-def cross_check_documents(
+def _cross_check_document_row(
     deals: list[dict[str, str]],
     disc_row: dict[str, str],
 ) -> list[dict[str, str]]:
@@ -258,6 +258,14 @@ def cross_check_documents(
     for field in ("relationship", "transaction_type", "amount"):
         if field in disc_row and not isinstance(disc_row[field], str):
             raise TypeError(f"disc_row의 {field!r}은 문자열이어야 합니다.")
+
+    # Treat an absent or entirely blank disclosure transaction as no deal.
+    # Run this after type validation and keep warnings for partial transactions.
+    if not deals and not any(
+        _normalized(disc_row.get(field, ""))
+        for field in ("related_party", "relationship", "transaction_type", "amount")
+    ):
+        return []
 
     issues: list[dict[str, str]] = []
     for field in ("related_party", "relationship", "transaction_type", "amount"):
@@ -324,4 +332,44 @@ def cross_check_documents(
                 }
             )
 
+    return issues
+
+
+def cross_check_documents(
+    deals: list[dict[str, str]],
+    disc_row: dict[str, str] | list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Compare both directions; pass all disclosure transactions together.
+
+    A dict is retained for callers with one disclosure transaction. An empty
+    dict or all-blank transaction fields represents no disclosure transaction.
+    Findings describe only the supplied records, not the complete documents.
+    """
+    if not isinstance(disc_row, (dict, list)):
+        raise TypeError("disc_row must be a dict or a list of dicts")
+    rows = disc_row if isinstance(disc_row, list) else [disc_row]
+    issues = []
+    # The existing row checker validates types and compares matched fields.
+    # Validate every row before interpreting blank fields as an absent deal.
+    for row in rows or [{}]:
+        row_issues = _cross_check_document_row(deals, row)
+        if any(_normalized(row.get(field, "")) for field in (
+            "related_party", "relationship", "transaction_type", "amount"
+        )):
+            issues.extend(row_issues)
+
+    disclosed_parties = {
+        _normalized(row.get("related_party", "")) for row in rows
+        if _normalized(row.get("related_party", ""))
+    }
+    reported_parties = set()
+    for deal in deals:
+        party = _normalized(deal.get("related_party", ""))
+        if not party or party in disclosed_parties or party in reported_parties:
+            continue
+        reported_parties.add(party)
+        issues.append({
+            "issue": f"감사보고서의 거래처 {deal['related_party']!r}가 제공된 정보공개서 거래에서 확인되지 않습니다.",
+            "evidence": f"감사보고서: {_describe_deal(deal)}; 원문 인용: {deal.get('quote', '')!r}",
+        })
     return issues

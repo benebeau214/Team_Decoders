@@ -1,13 +1,14 @@
 """LLM-backed tasks for explaining existing franchise analysis results."""
 
 import json
+import logging
 import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
 import pandas as pd
 
-from llm_client import LLMCallError
+_logger = logging.getLogger(__name__)
 
 DISCLAIMER = "법률·투자 자문이 아닙니다."
 
@@ -291,7 +292,8 @@ related_party와 transaction_type을 확인할 수 없는 항목은 반환하지
 
     try:
         response = llm_call(prompt)
-    except LLMCallError:
+    except Exception:
+        _logger.exception("LLM extraction call failed")
         return {"status": "llm_error", "items": []}
     if not isinstance(response, str):
         return {"status": "parse_error", "items": []}
@@ -395,7 +397,8 @@ quote는 아래 원문에 실제로 존재하는 부분을 글자 그대로 인�
 
     try:
         response = llm_call(prompt)
-    except LLMCallError:
+    except Exception:
+        _logger.exception("LLM extraction call failed")
         return {"status": "llm_error", "items": [], "dropped": 0}
     if not isinstance(response, str):
         return {"status": "parse_error", "items": [], "dropped": 0}
