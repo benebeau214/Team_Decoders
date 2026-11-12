@@ -54,10 +54,7 @@ def _format_value(value: Any, suffix: str = "") -> str:
     return f"{value}{suffix}"
 
 
-# ---------------------------------------------------------------------------
-# Stitch design layer: CSS + small HTML helpers.
-# All dynamic text is escaped with _e() before it is placed in HTML.
-# ---------------------------------------------------------------------------
+
 _TONE_BY_LEVEL = {"정상": "ok", "주의": "warn", "위험": "danger"}
 _SCENARIO_TONES = (("보수", "warn"), ("평균", "primary"), ("낙관", "ok"))
 _PERCENT_ITEMS = {"부채비율", "영업이익률", "계약 해지율"}
@@ -668,6 +665,7 @@ def _render_input_form(brands: list[str], regions: list[str]) -> dict[str, Any] 
 
 
 def main() -> None:
+    """Streamlit 앱의 진입점. 입력 폼을 그리고, 제출되면 파이프라인을 실행해 결과를 표시한다."""
     st.set_page_config(
         page_title="프랜차이즈 본사 재무 건강검진",
         layout="wide",

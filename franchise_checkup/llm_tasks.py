@@ -17,7 +17,7 @@ USER_TYPE_FOCUS = {
 }
 
 def _json_safe(value: Any) -> Any:
-    """Convert analysis values to JSON-compatible values without losing missingness."""
+    """분석 값을 결측 정보를 잃지 않고 JSON으로 직렬화 가능한 형태로 바꾼다."""
     if isinstance(value, pd.DataFrame):
         return {
             "type": "DataFrame",
@@ -57,7 +57,7 @@ def _analysis_prompt(
     flags: object,
     user_type: str,
 ) -> str:
-    """Build a prompt containing only the supplied analysis results."""
+    """분석 결과만 담은 보고서 작성 프롬프트를 만든다."""
     analysis = {
         "signals": _json_safe(signals),
         "payback": _json_safe(payback_df),
@@ -125,7 +125,7 @@ def _fallback_report(
     user_type: str, 
     reason: str
 ) -> dict[str, str | list[str]]:
-    """Return a transparent report-generation fallback without judging analysis."""
+    """보고서 생성 실패 시 실패 원인과 기본 체크리스트가 담긴 대체 보고서를 만든다."""
     if user_type == "예비":
         checklist = [
             "본사 신호표의 위험 수준과 판정 근거를 확인하세요.",
@@ -157,16 +157,30 @@ def _fallback_report(
 
 
 def write_report(
-    signals: object,
-    payback_df: object,
-    flags: object,
+    signals: list[dict],
+    payback_df: pd.DataFrame | None,
+    flags: list[dict],
     user_type: str,
     llm_call: Callable[[str], str],
 ) -> dict[str, str | list[str]]:
-    """Write a Korean non-expert report from existing analysis results.
+    """기존 분석 결과를 바탕으로 비전문가용 한국어 보고서를 작성한다.
 
-    The input result schemas are not fixed yet, so the function preserves their
-    supplied structure in the prompt rather than interpreting or recalculating it.
+    분석 결과를 다시 계산하지 않고 전달받은 구조 그대로 LLM에 요청한다.
+
+    Args:
+        signals: judge_risk_signals의 반환값.
+        payback_df: simulate_payback의 반환값. 계산 실패 시 None.
+        flags: 문서 검토 결과 [{"issue", "evidence", "quote"(선택)}, ...].
+        user_type: "예비" 또는 "기존".
+        llm_call: 프롬프트(str)를 받아 JSON 문자열을 반환하는 함수.
+
+    Returns:
+        {"summary": str, "checklist": list[str]}
+        summary에는 면책 문구가 항상 포함된다. LLM 호출·응답 오류가 있어도
+        예외 없이 같은 구조의 대체 보고서를 반환한다.
+
+    Raises:
+        ValueError: user_type이 "예비"/"기존"이 아님.
     """
     if not isinstance(user_type, str):
         raise ValueError("user_type must be a string")
@@ -258,12 +272,20 @@ def extract_related_party_deals(
 ) -> dict[str, object]:
     """감사보고서 주석에서 특수관계자 거래를 추출한다.
 
-    필드 값은 인용문에서 그대로 추출한다(단위 변환·의역 불가).
-    거래처와 거래 유형은 필수이며 관계와 금액은 미상일 때 비울 수 있다.
-    항목 검증 실패 시 정상 항목을 보존하고 errors에 0부터 시작하는
-    항목 위치와 원인을 반환한다. 일부 성공은 partial_error,
-    모든 항목 실패는 validation_error이다. 문자열 근거 검증은
-    문맥상의 관계나 거래의 진실성까지 보장하지 않는다.
+    각 필드 값은 인용문(quote)에서 그대로 가져와야 하며, 단위 변환이나
+    의역은 하지 않는다. 거래처와 거래 유형은 필수, 관계와 금액은 비워둘 수 있다.
+
+    Args:
+        note_text: 감사보고서 주석 원문.
+        llm_call: 프롬프트(str)를 받아 JSON 문자열을 반환하는 함수.
+
+    Returns:
+        {"status": str, "items": list[dict], "errors": list[dict]}
+        status는 "ok", "empty", "llm_error", "parse_error", "partial_error", "validation_error" 중 하나.
+        items의 각 항목은 {related_party, relationship, transaction_type, amount, quote}. 
+        errors는 partial_error·validation_error일 때만 있으며
+        {"index": int, "reason": str}로 항목 위치와 원인을 담는다.
+        근거 검증은 문자열 일치만 확인하므로 거래의 사실 여부까지 보장하지 않는다.
     """
     if not isinstance(note_text, str) or not note_text.strip():
         return {"status": "empty", "items": []}
@@ -370,7 +392,19 @@ def extract_unfavorable_clauses(
     clause_text: str,
     llm_call: Callable[[str], str],
 ) -> dict:
-    """정보공개서 조항에서 점주에게 불리한 조항을 유형, 원문 인용과 함께 추출한다."""
+    """정보공개서 조항에서 점주에게 불리한 조항을 유형·원문 인용과 함께 추출한다.
+
+    Args:
+        clause_text: 정보공개서 계약 조항 원문.
+        llm_call: 프롬프트(str)를 받아 JSON 문자열을 반환하는 함수.
+
+    Returns:
+        {"status": str, "items": list[dict], "dropped": int}
+        status는 "ok", "empty", "llm_error", "parse_error" 중 하나.
+        items의 각 항목은 {"type": str, "quote": str, "reason": str}이고,
+        quote는 원문에 실제로 있는 문장이다. dropped는 인용이 원문에 없어
+        제외한 개수이며 status가 "ok"여도 0이 아닐 수 있다.
+    """
     if not isinstance(clause_text, str) or not clause_text.strip():
         return {"status": "empty", "items": [], "dropped": 0}
 

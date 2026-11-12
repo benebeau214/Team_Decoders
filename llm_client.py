@@ -8,12 +8,20 @@ class LLMCallError(Exception):
 
 
 def llm_call(prompt: str) -> str:
-    """[MOCK] 요청 종류별 데모용 고정 JSON을 반환한다.
+    """프롬프트를 LLM에 보내고 응답 문자열(JSON)을 받는다.
 
-    실제 AI 분석은 하지 않는다. 정해진 데모 원문에만 사용하는 mock이다.
-    13주차에는 문자열 입력·문자열 출력 형식을 유지하여 실제 API로 교체한다.
-    실제 API 연결 시 타임아웃과 제한된 재시도를 설정하고,
-    SDK의 호출 예외는 raise LLMCallError(...) from exc로 변환한다.
+    현재는 데모용 mock이며 [MOCK] 응답을 반환한다. 13주차에 실제 API로 교체해도
+    입력(str)·출력(str) 형식은 유지한다.
+
+    Args:
+        prompt: LLM에 전달할 전체 프롬프트.
+
+    Returns:
+        JSON 형식의 응답 문자열. 구조는 호출하는 작업(보고서 작성,
+        특수관계자 거래 추출, 불리한 조항 추출)마다 다르다.
+
+    Raises:
+        LLMCallError: 호출 실패, 또는 지원하지 않는 요청.
     """
 
     # 1. 보고서 작성 요청
