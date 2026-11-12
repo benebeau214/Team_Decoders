@@ -1,13 +1,14 @@
 """LLM-backed tasks for explaining existing franchise analysis results."""
 
 import json
+import logging
 import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
 import pandas as pd
 
-from llm_client import LLMCallError
+_logger = logging.getLogger(__name__)
 
 DISCLAIMER = "법률·투자 자문이 아닙니다."
 
@@ -15,6 +16,25 @@ USER_TYPE_FOCUS = {
     "예비": "가맹 계약 전 확인할 사항",
     "기존": "현재 운영과 계약 갱신·추가 출점 전에 확인할 사항",
 }
+
+_JSON_FENCE_PATTERN = re.compile(
+    r"```(?:json)?\s*(.*?)\s*```",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+
+
+def _parse_json_response(response: str) -> Any:
+    """LLM 응답 문자열에서 코드 펜스를 벗겨 JSON으로 파싱한다.
+
+    파싱 실패 시 json.JSONDecodeError를 그대로 올린다.
+    파싱 결과의 구조 검증은 호출하는 쪽에서 담당한다.
+    """
+    content = response.strip()
+    fenced = _JSON_FENCE_PATTERN.fullmatch(content)
+    if fenced:
+        content = fenced.group(1).strip()
+    return json.loads(content)
+
 
 def _json_safe(value: Any) -> Any:
     """분석 값을 결측 정보를 잃지 않고 JSON으로 직렬화 가능한 형태로 바꾼다."""
@@ -210,13 +230,8 @@ def write_report(
             f"LLM 응답 자료형 오류 (문자열이 아닌 {type(response).__name__})",
         )
 
-    content = response.strip()
-    if content.startswith("```") and content.endswith("```"):
-        lines = content.splitlines()
-        content = "\n".join(lines[1:-1]).strip()
-
     try:
-        result = json.loads(content)
+        result = _parse_json_response(response)
     except json.JSONDecodeError as error:
         return _fallback_report(
             user_type,
@@ -313,22 +328,14 @@ related_party와 transaction_type을 확인할 수 없는 항목은 반환하지
 
     try:
         response = llm_call(prompt)
-    except LLMCallError:
+    except Exception:
+        _logger.exception("LLM extraction call failed")
         return {"status": "llm_error", "items": []}
     if not isinstance(response, str):
         return {"status": "parse_error", "items": []}
 
-    cleaned_response = response.strip()
-    fenced_response = re.fullmatch(
-        r"```(?:json)?\s*(.*?)\s*```",
-        cleaned_response,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    if fenced_response:
-        cleaned_response = fenced_response.group(1).strip()
-
     try:
-        parsed_response = json.loads(cleaned_response)
+        parsed_response = _parse_json_response(response)
     except json.JSONDecodeError:
         return {"status": "parse_error", "items": []}
 
@@ -429,22 +436,14 @@ quote는 아래 원문에 실제로 존재하는 부분을 글자 그대로 인�
 
     try:
         response = llm_call(prompt)
-    except LLMCallError:
+    except Exception:
+        _logger.exception("LLM extraction call failed")
         return {"status": "llm_error", "items": [], "dropped": 0}
     if not isinstance(response, str):
         return {"status": "parse_error", "items": [], "dropped": 0}
 
-    cleaned_response = response.strip()
-    fenced_response = re.fullmatch(
-        r"```(?:json)?\s*(.*?)\s*```",
-        cleaned_response,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    if fenced_response:
-        cleaned_response = fenced_response.group(1).strip()
-
     try:
-        parsed_response = json.loads(cleaned_response)
+        parsed_response = _parse_json_response(response)
     except json.JSONDecodeError:
         return {"status": "parse_error", "items": [], "dropped": 0}
 

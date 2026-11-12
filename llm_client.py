@@ -1,14 +1,22 @@
 """LLM 호출 계층. 현재는 데모용 mock을 사용한다."""
 
 import json
+import os
+
+# Read once at startup; mock mode is the default until the API is connected.
+USE_MOCK = os.getenv("USE_MOCK", "true").strip().lower() in {"true", "1", "yes"}
+
+# Mock 응답의 자유 서술 필드 앞에 붙여 화면에서 실제 분석 결과와 구분한다.
+# 원문 인용 검증을 받는 필드(quote, 특수관계자 거래 필드)에는 붙이지 않는다.
+MOCK_MARKER = "[MOCK]"
 
 
 class LLMCallError(Exception):
     """LLM 호출 실패. 실제 API 연결 시 SDK 호출 예외를 이 예외로 변환한다."""
 
 
-def llm_call(prompt: str) -> str:
-    """프롬프트를 LLM에 보내고 응답 문자열(JSON)을 받는다.
+def _mock_llm_call(prompt: str) -> str:
+    """[MOCK] 요청 종류별 데모용 고정 JSON을 반환한다.
 
     현재는 데모용 mock이며 [MOCK] 응답을 반환한다. 13주차에 실제 API로 교체해도
     입력(str)·출력(str) 형식은 유지한다.
@@ -46,7 +54,7 @@ def llm_call(prompt: str) -> str:
 
         mock_response = {
             "summary": (
-                "현재 응답은 보고서 작성 기능의 동작을 확인하기 위한 "
+                f"{MOCK_MARKER} 현재 응답은 보고서 작성 기능의 동작을 확인하기 위한 "
                 "데모용 고정 응답입니다. "
                 "입력된 재무·문서 자료를 실제로 분석한 결과가 아니므로, "
                 "화면에 표시된 분석 결과를 직접 확인해야 합니다."
@@ -78,9 +86,25 @@ def llm_call(prompt: str) -> str:
             {
                 "type": "필수품목·구매 강제",
                 "quote": "가맹점사업자는 가맹본부가 지정한 업체로부터 원재료 전량을 구매하여야 한다.",
-                "reason": "원재료 구매처를 자유롭게 선택하기 어렵기 때문이다.",
+                "reason": f"{MOCK_MARKER} 원재료 구매처를 자유롭게 선택하기 어렵기 때문이다.",
             }
         ]
     }
 
     return json.dumps(mock_response, ensure_ascii=False)
+
+
+def _real_llm_call(prompt: str) -> str:
+    """Return an API response string; implement timeouts and bounded retries here.
+
+    Read API credentials from environment variables and convert SDK failures to
+    LLMCallError when a provider is connected. Never fall back to mock silently.
+    """
+    raise LLMCallError("Real LLM is not connected yet. Set USE_MOCK=true.")
+
+
+def llm_call(prompt: str) -> str:
+    """Route to mock or real LLM while preserving the string response contract."""
+    if USE_MOCK:
+        return _mock_llm_call(prompt)
+    return _real_llm_call(prompt)

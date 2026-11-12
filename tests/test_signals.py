@@ -207,3 +207,73 @@ def test_exception_invalid_deals_type():
     # 예외: 거래 목록에 잘못된 타입을 전달하면 TypeError 발생
     with pytest.raises(TypeError, match="deals"):
         cross_check_documents(None, _deal())
+
+
+@pytest.mark.parametrize("disc_row", [
+    {},
+    {field: "" for field in ("related_party", "relationship", "transaction_type", "amount")},
+    {"related_party": "  ", "relationship": "\t", "transaction_type": "\n", "amount": " "},
+    {"brand": "가상브랜드", "year": 2025},
+])
+def test_cross_check_both_documents_have_no_deals(disc_row):
+    assert cross_check_documents([], disc_row) == []
+
+
+def test_cross_check_partial_disclosure_keeps_missing_field_warnings():
+    issues = cross_check_documents([], {"related_party": "가상유통"})
+    assert len(issues) == 3
+    for field in ("relationship", "transaction_type", "amount"):
+        assert any(field in issue["issue"] for issue in issues)
+
+
+def test_cross_check_empty_disclosure_with_audit_deal_still_warns():
+    assert cross_check_documents([_deal()], {})
+
+
+def test_cross_check_invalid_empty_field_type_still_raises():
+    with pytest.raises(TypeError):
+        cross_check_documents([], {"amount": None})
+
+
+@pytest.mark.parametrize("disclosure", [{}, []])
+def test_cross_check_audit_only_party_is_reported(disclosure):
+    issues = cross_check_documents([_deal()], disclosure)
+    assert len(issues) == 1
+    assert "가상유통" in issues[0]["issue"]
+    assert "정보공개서" in issues[0]["issue"]
+    assert "100만원" in issues[0]["evidence"]
+
+
+def test_cross_check_extra_audit_party_is_not_lost_after_match():
+    extra = {**_deal(), "related_party": "추가거래처", "quote": "추가거래처 원문"}
+    issues = cross_check_documents([_deal(), extra], _deal())
+    assert len(issues) == 1
+    assert "추가거래처" in issues[0]["issue"]
+    assert "추가거래처 원문" in issues[0]["evidence"]
+
+
+def test_cross_check_complete_disclosure_list_avoids_false_missing_party():
+    extra = {**_deal(), "related_party": "추가거래처"}
+    assert cross_check_documents([_deal(), extra], [_deal(), extra]) == []
+
+
+def test_cross_check_list_reports_missing_parties_in_both_directions():
+    audit_only = {**_deal(), "related_party": "감사전용"}
+    disclosure_only = {**_deal(), "related_party": "공개전용"}
+    issues = cross_check_documents([_deal(), audit_only], [_deal(), disclosure_only])
+    assert len(issues) == 2
+    assert any("감사전용" in item["issue"] for item in issues)
+    assert any("공개전용" in item["evidence"] for item in issues)
+
+
+def test_cross_check_party_normalization_and_duplicate_audit_records():
+    deal = {**_deal(), "related_party": " Example  Corp "}
+    disclosed = {**_deal(), "related_party": "example corp"}
+    assert cross_check_documents([deal], [disclosed]) == []
+    assert len(cross_check_documents([deal, deal], [])) == 1
+
+
+@pytest.mark.parametrize("disclosure", [[None], [{"amount": None}]])
+def test_cross_check_invalid_disclosure_list_rows_raise(disclosure):
+    with pytest.raises(TypeError):
+        cross_check_documents([], disclosure)
