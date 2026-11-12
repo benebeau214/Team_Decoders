@@ -3,6 +3,15 @@ import re
 from collections.abc import Mapping
 from decimal import Decimal
 
+
+def _numeric_or_none(row: dict, key: str) -> int | float | None:
+    """row[key]가 유효한 숫자면 그대로, 아니면(누락·문자열·NaN) None을 반환합니다."""
+    value = row.get(key)
+    if not isinstance(value, (int, float)) or value != value:
+        return None
+    return value
+
+
 def calc_financial_ratios(fin_row: dict) -> dict:
     """
     재무 비율과 자본잠식 상태를 계산합니다.
@@ -19,17 +28,11 @@ def calc_financial_ratios(fin_row: dict) -> dict:
     if not isinstance(fin_row, dict):
         raise ValueError("재무 행 형식 오류")
 
-    def value_for(key):
-        value = fin_row.get(key)
-        if not isinstance(value, (int, float)) or value != value:
-            return None
-        return value
-
-    total_liabilities = value_for("total_liabilities")
-    total_equity = value_for("total_equity")
-    capital_stock = value_for("capital_stock")
-    revenue = value_for("revenue")
-    operating_income = value_for("operating_income")
+    total_liabilities = _numeric_or_none(fin_row, "total_liabilities")
+    total_equity = _numeric_or_none(fin_row, "total_equity")
+    capital_stock = _numeric_or_none(fin_row, "capital_stock")
+    revenue = _numeric_or_none(fin_row, "revenue")
+    operating_income = _numeric_or_none(fin_row, "operating_income")
 
     debt_ratio = None
     if (
@@ -82,15 +85,9 @@ def calc_termination_rate(disc_row: dict) -> float | None:
     if not isinstance(disc_row, dict):
         raise ValueError("정보공개서 행 형식 오류")
 
-    def value_for(key):
-        value = disc_row.get(key)
-        if not isinstance(value, (int, float)) or value != value:
-            return None
-        return value
-
-    stores_begin = value_for("stores_begin")
-    contract_terminated = value_for("contract_terminated")
-    contract_ended = value_for("contract_ended")
+    stores_begin = _numeric_or_none(disc_row, "stores_begin")
+    contract_terminated = _numeric_or_none(disc_row, "contract_terminated")
+    contract_ended = _numeric_or_none(disc_row, "contract_ended")
 
     if (
         stores_begin is None
