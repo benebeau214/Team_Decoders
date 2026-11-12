@@ -1,8 +1,3 @@
-"""Streamlit front end for the franchise financial health check.
-
-UI only. The analysis workflow lives in ``pipeline.py`` (``run_checkup``).
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -18,27 +13,11 @@ from franchise_checkup.pipeline import (
     PAYBACK_SCENARIOS,
     PROJECT_ROOT,
     PipelineError,
-    _audit_review_flags,
-    _common_year_summary,
-    _freshness_warnings,
-    _regional_rows,
-    _safe_audit_review_flags,
-    _safe_clause_review_flags,
-    _year_value,
     common_brands,
     list_regions,
     load_tables,
     run_checkup,
 )
-
-# Keep the small data helpers available from the UI module for callers that
-# imported them before the workflow was moved into ``pipeline.py``.
-_common_brands = common_brands
-
-
-def _money_input_label(field: str) -> str:
-    """Describe a monetary input without assuming its source unit."""
-    return f"{field} (화폐 단위 확인 필요)"
 
 
 @st.cache_data(show_spinner=False, ttl=300)
