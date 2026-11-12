@@ -1,15 +1,17 @@
 import pandas as pd
 
 from franchise_checkup.app import (
+    _money_input_label,
+)
+from franchise_checkup.pipeline import (
     _audit_review_flags,
-    _common_brands,
     _common_year_summary,
     _freshness_warnings,
-    _money_input_label,
     _safe_audit_review_flags,
     _safe_clause_review_flags,
     _regional_rows,
     _year_value,
+    common_brands,
 )
 
 
@@ -115,7 +117,7 @@ def test_region_normalization_does_not_mutate_cached_source():
 def test_brand_options_use_financial_and_disclosure_intersection():
     financial = pd.DataFrame({"brand": [" A ", "B", None]})
     disclosure = pd.DataFrame({"brand": ["A", "C", " "]})
-    assert _common_brands(financial, disclosure) == ["A"]
+    assert common_brands(financial, disclosure) == ["A"]
 
 
 def test_document_extraction_exceptions_are_logged_and_reported_independently(caplog):
