@@ -33,6 +33,20 @@ def test_mock_preserves_existing_json_responses(monkeypatch, prompt):
     assert isinstance(json.loads(result), dict)
 
 
+@pytest.mark.parametrize(
+    "prompt, path",
+    [
+        ("<report_text> 사용자 유형: 예비", ("summary",)),
+        ("<clause_text>demo</clause_text>", ("items", 0, "reason")),
+    ],
+)
+def test_mock_free_text_is_marked(prompt, path):
+    value = json.loads(llm_client._mock_llm_call(prompt))
+    for key in path:
+        value = value[key]
+    assert value.startswith(llm_client.MOCK_MARKER)
+
+
 def test_real_mode_reports_unimplemented_api_without_mock_fallback(monkeypatch):
     monkeypatch.setattr(llm_client, "USE_MOCK", False)
     with pytest.raises(llm_client.LLMCallError, match="not connected"):
