@@ -74,15 +74,21 @@ def _user_input() -> dict[str, object]:
 
 
 def _mock_llm(prompt: str) -> str:
-    if "<note_text>" in prompt or "<clause_text>" in prompt:
+    if prompt.startswith("당신은 감사보고서 주석을 분석하는 도우미입니다."):
         return json.dumps({"items": []}, ensure_ascii=False)
-    return json.dumps(
-        {
-            "summary": "통합 테스트 보고서입니다.",
-            "checklist": ["계약서를 확인하세요."],
-        },
-        ensure_ascii=False,
-    )
+    if prompt.startswith(
+        "당신은 가맹사업 정보공개서의 계약 조항을 검토하는 분석 도우미입니다."
+    ):
+        return json.dumps({"items": []}, ensure_ascii=False)
+    if prompt.startswith("<report_text>"):
+        return json.dumps(
+            {
+                "summary": "통합 테스트 보고서입니다.",
+                "checklist": ["계약서를 확인하세요."],
+            },
+            ensure_ascii=False,
+        )
+    raise AssertionError("예상하지 못한 LLM 프롬프트가 전달되었습니다.")
 
 
 def test_run_checkup_normal_path_returns_expected_values_and_keys():
