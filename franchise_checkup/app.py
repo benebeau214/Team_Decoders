@@ -1,8 +1,3 @@
-"""Streamlit front end for the franchise financial health check.
-
-UI only. The analysis workflow lives in ``pipeline.py`` (``run_checkup``).
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -18,27 +13,11 @@ from franchise_checkup.pipeline import (
     PAYBACK_SCENARIOS,
     PROJECT_ROOT,
     PipelineError,
-    _audit_review_flags,
-    _common_year_summary,
-    _freshness_warnings,
-    _regional_rows,
-    _safe_audit_review_flags,
-    _safe_clause_review_flags,
-    _year_value,
     common_brands,
     list_regions,
     load_tables,
     run_checkup,
 )
-
-# Keep the small data helpers available from the UI module for callers that
-# imported them before the workflow was moved into ``pipeline.py``.
-_common_brands = common_brands
-
-
-def _money_input_label(field: str) -> str:
-    """Describe a monetary input without assuming its source unit."""
-    return f"{field} (화폐 단위 확인 필요)"
 
 
 @st.cache_data(show_spinner=False, ttl=300)
@@ -54,10 +33,7 @@ def _format_value(value: Any, suffix: str = "") -> str:
     return f"{value}{suffix}"
 
 
-# ---------------------------------------------------------------------------
-# Stitch design layer: CSS + small HTML helpers.
-# All dynamic text is escaped with _e() before it is placed in HTML.
-# ---------------------------------------------------------------------------
+
 _TONE_BY_LEVEL = {"정상": "ok", "주의": "warn", "위험": "danger"}
 _SCENARIO_TONES = (("보수", "warn"), ("평균", "primary"), ("낙관", "ok"))
 _PERCENT_ITEMS = {"부채비율", "영업이익률", "계약 해지율"}
@@ -290,19 +266,23 @@ def _payback_records(payback_df: pd.DataFrame) -> list[dict[str, Any]]:
     return records
 
 
+_REVIEW_CATEGORY_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("특수관계자 거래", ("특수관계자 거래 확인:",), ()),
+    ("계약 조항", ("점주 확인 조항:",), ()),
+    ("자료 누락", (), ("원문 없음", "자료 누락", "값이 누락")),
+    ("문서 불일치", (), ("불일치", "다릅", "일치하지", "확인되지 않습니다", "비교 대상이 여러")),
+    ("추출·계산 확인", (), ("추출", "실패", "계산", "교차 점검", "제외된")),
+)
+_DEFAULT_REVIEW_CATEGORY = "기준연도·기타 확인"
+
+
 def _review_category(flag: dict[str, Any]) -> str:
+    """검토 항목의 issue 문구로 화면에 표시할 분류를 정한다."""
     issue = str(flag.get("issue", ""))
-    if "특수관계자" in issue or "관계자 거래" in issue:
-        return "특수관계자 거래"
-    if "조항" in issue:
-        return "계약 조항"
-    if "불일치" in issue or "다릅" in issue or "일치하지" in issue:
-        return "문서 불일치"
-    if "누락" in issue or "자료" in issue or "문서" in issue:
-        return "자료 누락"
-    if "추출" in issue or "실패" in issue or "계산" in issue:
-        return "추출·계산 확인"
-    return "기준연도·기타 확인"
+    for category, prefixes, keywords in _REVIEW_CATEGORY_RULES:
+        if issue.startswith(prefixes) or any(keyword in issue for keyword in keywords):
+            return category
+    return _DEFAULT_REVIEW_CATEGORY
 
 
 def _render_review_flags(flags: list[dict[str, Any]]) -> None:
@@ -668,6 +648,7 @@ def _render_input_form(brands: list[str], regions: list[str]) -> dict[str, Any] 
 
 
 def main() -> None:
+    """Streamlit 앱의 진입점. 입력 폼을 그리고, 제출되면 파이프라인을 실행해 결과를 표시한다."""
     st.set_page_config(
         page_title="프랜차이즈 본사 재무 건강검진",
         layout="wide",
