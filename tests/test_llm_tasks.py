@@ -129,19 +129,21 @@ def test_empty_payback_dataframe_is_distinguished_from_nan_scenario():
 
 
 @pytest.mark.parametrize(
-    ("llm_call", "reason"),
+    ("llm_call", "safe_reason"),
     [
-        (lambda prompt: (_ for _ in ()).throw(RuntimeError("연결 오류")), "LLM 호출 실패"),
-        (lambda prompt: '{"summary":', "JSON 파싱 실패"),
-        (lambda prompt: {"summary": "응답"}, "응답 자료형 오류"),
-        (lambda prompt: '{"summary": "요약"}', "필수 필드 누락"),
-        (lambda prompt: '{"summary": "요약", "checklist": "확인"}', "자료형 오류"),
+        (lambda prompt: (_ for _ in ()).throw(RuntimeError("연결 오류")), "LLM 호출에 실패"),
+        (lambda prompt: '{"summary":', "LLM 응답을 처리하는 과정에서 오류"),
+        (lambda prompt: {"summary": "응답"}, "올바른 형식의 응답을 받지 못했습니다"),
+        (lambda prompt: '{"summary": "요약"}', "필요한 보고서 항목이 포함되지 않았습니다"),
+        (lambda prompt: '{"summary": "요약", "checklist": "확인"}', "확인 항목이 올바르지 않습니다"),
     ],
 )
-def test_llm_failures_return_transparent_fallback(llm_call, reason):
+def test_llm_failures_return_transparent_fallback(llm_call, safe_reason):
     result = write_report([], pd.DataFrame(), [], "기존", llm_call)
 
-    assert reason in result["summary"]
+    assert safe_reason in result["summary"]
+    assert "연결 오류" not in result["summary"]
+    assert DISCLAIMER in result["summary"]
     assert "기존 파이썬 분석 결과의 실패를 의미하지 않습니다" in result["summary"]
     assert "화면에 표시된 기존 분석 결과를 직접 확인" in result["summary"]
     assert isinstance(result["checklist"], list)

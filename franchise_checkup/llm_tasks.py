@@ -176,6 +176,39 @@ def _fallback_report(
     }
 
 
+class _ReportFormatError(ValueError):
+    """LLM 응답이 보고서 형식에 맞지 않음. 메시지는 대체 보고서에 표시할 사유이다."""
+
+
+def _parse_report(response: object) -> dict[str, str | list[str]]:
+    """LLM 응답을 검증해 {"summary", "checklist"} 보고서로 만든다.
+
+    Raises:
+        _ReportFormatError: 응답이 문자열·JSON 객체가 아니거나 항목이 올바르지 않음.
+    """
+    if not isinstance(response, str):
+        raise _ReportFormatError("LLM으로부터 올바른 형식의 응답을 받지 못했습니다.")
+    try:
+        result = _parse_json_response(response)
+    except json.JSONDecodeError as error:
+        raise _ReportFormatError("LLM 응답을 처리하는 과정에서 오류가 발생했습니다.") from error
+    if not isinstance(result, dict) or set(result) != {"summary", "checklist"}:
+        raise _ReportFormatError("LLM 응답에 필요한 보고서 항목이 포함되지 않았습니다.")
+
+    summary, checklist = result["summary"], result["checklist"]
+    if not isinstance(summary, str) or not summary.strip():
+        raise _ReportFormatError("LLM 보고서의 요약 항목이 올바르지 않습니다.")
+    if not isinstance(checklist, list) or not all(
+        isinstance(item, str) and item.strip() for item in checklist
+    ):
+        raise _ReportFormatError("LLM 보고서의 확인 항목이 올바르지 않습니다.")
+
+    summary = summary.strip()
+    if DISCLAIMER not in summary:
+        summary = f"{summary} {DISCLAIMER}"
+    return {"summary": summary, "checklist": [item.strip() for item in checklist]}
+
+
 def write_report(
     signals: list[dict],
     payback_df: pd.DataFrame | None,
@@ -210,66 +243,21 @@ def write_report(
 
     try:
         prompt = _analysis_prompt(signals, payback_df, flags, user_type)
-    except Exception as error:
-        return _fallback_report(
-            user_type,
-            f"보고서 입력 자료 구성 실패 ({type(error).__name__}: {error})",
-        )
+    except Exception:
+        _logger.exception("Failed to build the report prompt")
+        return _fallback_report(user_type, "분석 자료를 보고서 형식으로 구성하지 못했습니다.")
 
     try:
         response = llm_call(prompt)
-    except Exception as error:
-        return _fallback_report(
-            user_type,
-            f"LLM 호출 실패 ({type(error).__name__}: {error})",
-        )
-
-    if not isinstance(response, str):
-        return _fallback_report(
-            user_type,
-            f"LLM 응답 자료형 오류 (문자열이 아닌 {type(response).__name__})",
-        )
+    except Exception:
+        _logger.exception("LLM call failed while writing the report")
+        return _fallback_report(user_type, "LLM 호출에 실패하여 자동 보고서를 생성하지 못했습니다.")
 
     try:
-        result = _parse_json_response(response)
-    except json.JSONDecodeError as error:
-        return _fallback_report(
-            user_type,
-            f"LLM 응답 JSON 파싱 실패 ({error})",
-        )
-
-    if not isinstance(result, dict):
-        return _fallback_report(
-            user_type,
-            f"LLM 응답 형식 오류 (JSON 객체가 아닌 {type(result).__name__})",
-        )
-
-    if set(result.keys()) != {"summary", "checklist"}:
-        return _fallback_report(
-            user_type,
-            "LLM 응답 필수 필드 누락 혹은 불필요한 필드 존재",
-        )
-    if not isinstance(result["summary"], str) or not result["summary"].strip():
-        return _fallback_report(
-            user_type,
-            "LLM 응답 자료형 오류 (summary는 비어 있지 않은 문자열이어야 함)",
-        )
-    if not isinstance(result["checklist"], list) or not all(
-        isinstance(item, str) and item.strip() for item in result["checklist"]
-    ):
-        return _fallback_report(
-            user_type,
-            "LLM 응답 자료형 오류 (checklist는 비어 있지 않은 문자열 목록이어야 함)",
-        )
-
-    summary = result["summary"].strip()
-
-    if DISCLAIMER not in summary:
-        summary = f"{summary} {DISCLAIMER}"
-    return {
-        "summary": summary,
-        "checklist": [item.strip() for item in result["checklist"]],
-    }
+        return _parse_report(response)
+    except _ReportFormatError as error:
+        _logger.warning("Invalid LLM report response: %s", error)
+        return _fallback_report(user_type, str(error))
 
 
 _ITEM_FIELDS = (
