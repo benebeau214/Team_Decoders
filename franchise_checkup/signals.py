@@ -336,18 +336,23 @@ def cross_check_documents(
     deals: list[dict[str, str]],
     disc_row: dict[str, str] | list[dict[str, str]],
 ) -> list[dict[str, str]]:
-    """Compare both directions; pass all disclosure transactions together.
+    """감사보고서와 정보공개서의 거래 내역을 양방향으로 비교한다.
 
-    A dict is retained for callers with one disclosure transaction. An empty
-    dict or all-blank transaction fields represents no disclosure transaction.
-    Findings describe only the supplied records, not the complete documents.
+    정보공개서의 거래 내역은 모두 함께 전달한다. 거래가 한 건이면
+    딕셔너리 하나로 전달할 수 있다. 빈 딕셔너리나 거래 관련 필드가
+    모두 비어 있는 딕셔너리는 정보공개서에 기재된 거래가 없음을 뜻한다.
+
+    파이프라인 호출부는 추출 상태가 `ok`이거나, `partial_error`이면서
+    추출된 거래가 있는 경우에만 `deals`를 전달한다.
+    점검 결과는 전달받은 거래 내역의 범위에 한정된다.
     """
+        
     if not isinstance(disc_row, (dict, list)):
         raise TypeError("disc_row must be a dict or a list of dicts")
     rows = disc_row if isinstance(disc_row, list) else [disc_row]
     issues = []
-    # The existing row checker validates types and compares matched fields.
-    # Validate every row before interpreting blank fields as an absent deal.
+    # 행 단위 검사 함수에서 입력 자료형을 검증하고, 매칭된 거래의 필드 값을 비교한다.
+    # 빈 거래 필드를 거래 없음으로 처리하기 전에 모든 행을 검증한다.
     for row in rows or [{}]:
         row_issues = _cross_check_document_row(deals, row)
         if any(_normalized(row.get(field, "")) for field in (
