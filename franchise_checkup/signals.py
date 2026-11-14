@@ -360,10 +360,11 @@ def cross_check_documents(
         )):
             issues.extend(row_issues)
 
-    disclosed_parties = {
-        _normalized(row.get("related_party", "")) for row in rows
-        if _normalized(row.get("related_party", ""))
-    }
+    disclosed_parties = set()
+    for row in rows:
+        party = _normalized(row.get("related_party", ""))
+        if party:
+            disclosed_parties.add(party)
     reported_parties = set()
     for deal in deals:
         party = _normalized(deal.get("related_party", ""))
