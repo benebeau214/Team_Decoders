@@ -66,7 +66,7 @@ python -m pytest tests/ -q
 | # | 리뷰어 | 대상 | 판단 | 이유 | 커밋 | 근거 |
 |---|---|---|---|---|---|---|
 | A | 강민규 | `llm_tasks.py`의 JSON 파싱 로직 3곳 | 수용 | 파싱 로직을 공통화해 수정 시 동작이 어긋날 위험을 줄임 | `eba07d8` | [오채윤 AI 로그](ai_log/오채윤.md) |
-| B | 신동훈 | `signals.py`의 `cross_check_documents()`에 `deals_status` 추가 제안 | 보류 | 호출부에서 정상 추출 0건과 추출 실패를 이미 구분함. 일부 성공 시에는 확보한 거래가 있을 때만 호출하며, 이 조건을 docstring에 명시함 | `86d5728` | 임채희 AI 로그 작성 후 링크 추가 |
+| B | 신동훈 | `signals.py`의 `cross_check_documents()`에 `deals_status` 추가 제안 | 보류 | 호출부에서 정상 추출 0건과 추출 실패를 이미 구분함. 일부 성공 시에는 확보한 거래가 있을 때만 호출하며, 이 조건을 docstring에 명시함 | `86d5728` |  [임채희 AI 로그](ai_log/임채희.md) |
 | C | 이다현 | `signals.py`의 `value_for` 중복 정의 | 수용 | 두 함수가 공유하는 숫자 검증 규칙을 한곳에서 관리하도록 정리함 | `6b9e13c` | [최영효 AI 로그](ai_log/최영효.md) |
 
 
