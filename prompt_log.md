@@ -601,3 +601,312 @@ disc_row: 정보공개서에서 추출한 거래 한 행.
     - 정상: 선택 지역의 평균매출 반환
     - 경계: 선택 지역 데이터가 없으면 전국 평균매출 반환
     - 예외: 지역 평균매출과 전국 평균매출을 모두 사용할 수 없으면 `ValueError` 발생
+
+---
+
+## [signals] judge_risk_signals — 2026-10-29 (생성·리딩) / 2026-11-02 (결함 수정)
+
+- **작성자:** 최영효
+- **사용 도구:** GitHub Copilot Chat 
+- **프롬프트:**
+    
+    ```
+    #file:test_signals.py 를 참고해서 아래 함수를 구현해 주세요.
+    
+    당신은 파이썬 백엔드 개발을 돕는 어시스턴트입니다.
+    '프랜차이즈 본사 재무 건강검진' 시스템의 signals.py(재무·계약 신호 판정 모듈)에 들어갈 함수를 구현해 주세요.
+    이 함수는 미리 계산된 재무 지표와 계약 해지율을 임계값과 비교해 4개 항목의 위험 수준을 판정합니다.
+    
+    [함수 시그니처 — 변경 금지]
+    def judge_risk_signals(ratios: dict, termination_rate: float | None, thresholds: dict) -> list[dict]:
+    
+    [입력 명세]
+    - ratios: {"debt_ratio": float | None, "op_margin": float | None, "capital_status": str}
+      예: {"debt_ratio": 450.0, "op_margin": -2.0, "capital_status": "완전잠식"}
+      capital_status는 "정상" | "부분잠식" | "완전잠식" 중 하나이며, 그 외 값(예: "NA")은 정보 없음으로 본다.
+    - termination_rate: 계약 해지율(%), 정보가 없으면 None. 예: 25.0
+    - thresholds: {"debt_warn": 200, "debt_danger": 400, "term_warn": 10, "term_danger": 20}
+    
+    [출력 명세]
+    항상 길이 4인 리스트를 아래 순서로 반환한다.
+    [{"item": "부채비율", ...}, {"item": "자본잠식", ...}, {"item": "영업이익률", ...}, {"item": "계약 해지율", ...}]
+    각 원소는 정확히 4개 키를 가진다: {"item": str, "level": str, "value": 입력값 그대로, "reason": str(판정 근거 한 문장)}
+    level은 "정상" | "주의" | "위험" | "확인 필요" 중 하나다.
+    
+    [판정 규칙]
+    1) 부채비율: None → "확인 필요" / debt_ratio ≥ debt_danger → "위험" / debt_ratio ≥ debt_warn → "주의" / 그 외 "정상"
+    2) 자본잠식: "완전잠식" → "위험" / "부분잠식" → "주의" / "정상" → "정상" / 그 외 값 → "확인 필요"
+    3) 영업이익률: None → "확인 필요" / op_margin < 0 → "주의" / 그 외 "정상"
+    4) 계약 해지율: None → "확인 필요" / termination_rate ≥ term_danger → "위험" / termination_rate ≥ term_warn → "주의" / 그 외 "정상"
+    임계값과 정확히 같으면 해당 수준으로 판정한다(이상, ≥).
+    
+    [예외·경계 방침]
+    - ratios가 dict가 아니거나 "debt_ratio", "op_margin", "capital_status" 키 중 하나라도 없으면 ValueError("필수 지표 누락")를 발생시킨다.
+    - 값이 None이거나 알 수 없는 값이면 예외를 내지 않고 해당 항목을 "확인 필요"로 판정한다. 절대 "정상"으로 대체하지 않는다.
+    
+    [제약 조건]
+    - 표준 라이브러리만 사용 (pandas 등 외부 라이브러리 import 금지)
+    - 타입 힌트와 docstring 필수 (Args / Returns / Raises 포함)
+    - 임계값 숫자를 함수 안에 하드코딩하지 말고 반드시 thresholds 인자에서 읽을 것
+    - 전역 변수 수정, print, 파일·화면 접근 금지 (값만 받아 값만 반환하는 순수 함수)
+    - 가변 기본값 인자 사용 금지
+    
+    [통과해야 할 테스트 — test_signals.py]
+    T06: ratios{debt_ratio:450.0, op_margin:-2.0, capital_status:"완전잠식"}, termination_rate 25.0 → level ["위험","위험","주의","위험"]
+    T07: ratios{debt_ratio:250.0, op_margin:3.0, capital_status:"부분잠식"}, termination_rate 12.0 → ["주의","주의","정상","주의"]
+    T08: ratios{debt_ratio:200.0, op_margin:5.0, capital_status:"정상"}, termination_rate 3.0 → ["주의","정상","정상","정상"]
+    T09: ratios{debt_ratio:None, op_margin:None, capital_status:"NA"}, termination_rate None → ["확인 필요"] × 4 (예외 없음)
+    T10: ratios = {} → ValueError
+    ```
+    
+- **생성 코드 위치:** 커밋 `81abe11` (수정 전 원본)
+- **코드 리딩에서 발견한 결함 및 개선 사항:** (줄 번호는 `81abe11` 기준)
+    1. **[결함]** NaN이 들어오면 부채비율·영업이익률·해지율이 "정상"으로 판정되었다. `signals.py`:36-38(부채비율), :59-61(영업이익률), :72-74(해지율)의 `else` 블록. NaN과 비교하면 항상 False라서 마지막 `else`로 빠지기 때문이다. 직접 실행해서 확인했다.
+    2. **[개선점]** 판정 블록 반복 (:27-38, :63-74). 부채비율과 해지율 판정이 같은 구조(None → 확인 필요 / 위험 / 주의 / 그 외 정상)로 반복되어 있어, 수정할 때 여러 곳을 함께 고쳐야 하고 한 곳을 빠뜨릴 위험이 있다. 결함 1의 NaN 문제도 이 반복 구조 때문에 세 군데에 똑같이 생겼다. 공통 판정 함수 하나로 묶었다면 한 곳만 고치면 된다.
+    3. **[개선점]** 문자열 값이 들어오면 `TypeError` (:30, :56, :66). `debt_ratio`에 `'120'`처럼 숫자를 뜻하지만 문자열인 값이 들어오면 비교 연산에서 에러가 나서 나머지 항목의 결과까지 나오지 않고 프로그램 전체가 멈춘다. 직접 실행해서 확인했다 (`TypeError: '>=' not supported between instances of 'str' and 'int'`). 시그니처상 입력은 숫자 또는 None이므로 결함이 아닌 개선점으로 분류했다.
+    - 개선점 2·3은 이번 사이클에서 수정하지 않고 기록만 했다. 이번 수정은 결함 1에 한정했다.
+- **회귀 테스트:** 커밋 `8b72026`
+    - `test_t11_nan_is_check_needed` 추가. 수정 전 원본(`81abe11`)에서 1 failed, 5 passed로 실패하는 것을 먼저 확인했다 (실제 결과 `['정상','정상','정상','정상']`).
+    - 처음에 자본잠식 기대값을 '확인 필요'로 잘못 적었다가, 입력이 "정상"이므로 '정상'이 맞다는 것을 확인하고 고쳤다.
+- **수정 내역:** 
+    1. `debt_ratio`·`op_margin`·`termination_rate`의 None 조건에 `or math.isnan(값)`을 추가해 NaN도 '확인 필요'로 판정하도록 했다.
+    2. 처음에는 `x != x` 방식으로 고쳤다가 의도가 더 잘 드러나도록 `math.isnan`으로 변경했다. 변경 과정에서 `import math`를 지워 `NameError`로 4 failed가 났고, import를 복구해 해결했다.
+    3. 함수 시그니처와 개선점 2·3 관련 코드는 변경하지 않았다.
+- **수정 코드 위치:** 커밋 `d2519b9`
+- **팀 규칙 반영:** 커밋 `66cf4a2` (`test_signals.py`를 `tests/`로 이동, import를 `from franchise_checkup.signals import judge_risk_signals`로 변경, 테스트 내용은 그대로)
+- **테스트 결과:** `pytest 6 pass` (출력: `tests/signals_pytest_result.txt`)
+    - 정상: 위험·주의가 섞인 본사 판정, 항목 4개·순서·반환 키 고정 (T06, T07)
+    - 경계: 부채비율이 임계값과 정확히 같으면 '주의' (T08)
+    - 예외: 값 없음 → '확인 필요' (T09), 필수 키 없는 ratios → `ValueError` (T10)
+    - 회귀: NaN → '확인 필요' (T11)
+
+
+---
+
+## [signals] calc_financial_ratios · calc_termination_rate — 2026-11-03
+
+- **작성자:** 최영효
+- **사용 도구:** GitHub Copilot Chat 
+- **명세 결정 사항:** (설계 문서 V1에는 함수 한 줄 설명만 있어 구현 전에 직접 정함)
+    1. 키 이름: CSV 표준 스키마가 아직 확정되지 않아 직접 정함. `fin_row`: `total_liabilities`, `total_equity`, `capital_stock`, `revenue`, `operating_income` / `disc_row`: `stores_begin`, `contract_terminated`, `contract_ended` (공정위 정보공개서 `ystFrcsCnt`, `ctrtCncltnFrcsCnt`, `ctrtEndFrcsCnt`에 대응). 출력 키는 `judge_risk_signals` 입력(`debt_ratio`, `op_margin`, `capital_status`)과 맞춤.
+    2. 반올림하지 않음: 재무비율 반올림은 표시 단계의 일이고, 계산 함수에서 반올림하면 판정이 바뀔 수 있다 (예: 199.96% → 200.0 → '주의'). 채윤 님 payback 명세의 "판정은 반올림 전 값으로"와 같은 원칙.
+    3. 자본총계 ≤ 0이면 부채비율 `None`: 자본이 음수면 부채비율이 음수(예: -300%)가 되어 '정상'으로 판정되는 문제를 막기 위해, 실무의 N/M(의미 없음) 표시 관행을 따름. 위험은 자본잠식 항목('완전잠식' → 위험)이 잡는다.
+    4. 데이터 문제(정보 없음, 음수 건수, 0)는 예외 대신 `None`/`"NA"`로 처리해 '확인 필요'로 넘김: 사전 적재 데이터의 오류는 사용자가 고칠 수 없고, 값 하나 때문에 리포트 전체가 멈추면 안 되기 때문. 예외(`ValueError`)는 입력이 dict가 아닐 때(호출 실수)만 발생.
+- **테스트(구현 전 작성):** 커밋 `05a7cd1` (calc_financial_ratios 6개, calc_termination_rate 4개, 계산→판정 연결 1개). 함수가 없어 `ImportError`로 실패하는 것을 확인함. 해지율 테스트 값은 처음에 공개 정보공개서 수치를 썼다가, 실제 본사와 가상의 재무값이 한 테스트에 섞이지 않도록 이후 가상 값(연초 1000, 해지 30, 종료 20 → 5.0%)으로 교체함.
+- **프롬프트:**
+    
+    ```
+    #file:tests/test_signals.py 와 #file:franchise_checkup/signals.py 를 참고해서 아래 함수 2개를 구현해 주세요.
+    
+    당신은 파이썬 백엔드 개발을 돕는 어시스턴트입니다.
+    '프랜차이즈 본사 재무 건강검진' 시스템의 signals.py(재무·계약 신호 판정 모듈)에 들어갈 계산 함수 2개를 구현해 주세요.
+    두 함수의 출력은 같은 파일에 이미 있는 judge_risk_signals의 입력으로 그대로 들어갑니다.
+    명세에 모호한 점이 있으면 코드를 쓰기 전에 질문 목록부터 알려 주세요. 추측해서 구현하지 마세요.
+    
+    [함수 시그니처 — 변경 금지]
+    def calc_financial_ratios(fin_row: dict) -> dict:
+    def calc_termination_rate(disc_row: dict) -> float | None:
+    
+    [calc_financial_ratios 명세]
+    입력 fin_row 키: "total_liabilities"(부채총계), "total_equity"(자본총계), "capital_stock"(자본금), "revenue"(매출액), "operating_income"(영업이익)
+     예) {"total_liabilities": 150.0, "total_equity": 50.0, "capital_stock": 30.0, "revenue": 200.0, "operating_income": -10.0}
+    출력: {"debt_ratio": float | None, "op_margin": float | None, "capital_status": str} (키 3개 고정)
+    1. debt_ratio = total_liabilities / total_equity * 100
+       - total_equity <= 0 이면 None (의미 없는 비율, 0으로 나누기 금지)
+       - total_liabilities가 음수이면 None
+    2. op_margin = operating_income / revenue * 100 (영업손실이면 음수 그대로)
+       - revenue <= 0 이면 None
+    3. capital_status는 아래 순서대로 판단한다
+       - total_equity 정보 없음 → "NA"
+       - total_equity <= 0 → "완전잠식" (capital_stock 정보가 없어도)
+       - capital_stock 정보 없음 또는 음수 → "NA"
+       - total_equity < capital_stock → "부분잠식"
+       - 그 외 → "정상" (total_equity == capital_stock 은 "정상")
+    4. "정보 없음"은 키 없음, None, NaN을 모두 포함한다. 정보가 없으면 예외를 내지 않고 해당 지표를 None(capital_status는 "NA")으로 둔다.
+    5. fin_row가 dict가 아니면 ValueError("재무 행 형식 오류")
+    
+    [calc_termination_rate 명세]
+    입력 disc_row 키: "stores_begin"(연초 가맹점 수), "contract_terminated"(계약 해지 건수), "contract_ended"(계약 종료 건수)
+     예) {"stores_begin": 2370, "contract_terminated": 27, "contract_ended": 5}
+    1. 반환값 = (contract_terminated + contract_ended) / stores_begin * 100
+    2. 세 값 중 하나라도 정보 없음(키 없음, None, NaN) → None
+    3. 세 값 중 하나라도 음수 → None
+    4. stores_begin == 0 → None (0으로 나누기 금지)
+    5. disc_row가 dict가 아니면 ValueError("정보공개서 행 형식 오류")
+    
+    [공통 규칙]
+    - 두 함수 모두 반올림하지 않는다. 판정은 반올림 전 값으로 해야 하므로 원래 float를 그대로 반환한다.
+    - 데이터 문제(정보 없음, 음수, 0)는 예외 대신 None/"NA"로 처리한다. 예외는 입력이 dict가 아닐 때만 발생시킨다.
+    
+    [제약 조건]
+    - 표준 라이브러리만 사용 (pandas 등 외부 라이브러리 import 금지)
+    - 타입 힌트와 docstring 필수 (Args / Returns / Raises 포함)
+    - 전역 변수 수정, print, 파일·화면 접근 금지 (값만 받아 값만 반환하는 순수 함수)
+    - 두 함수를 signals.py의 judge_risk_signals 위에 추가한다
+    - judge_risk_signals와 tests/test_signals.py는 수정하지 말 것
+    
+    [통과해야 할 테스트 — tests/test_signals.py 전체]
+    - 기존 T06~T11 (judge_risk_signals) 6개는 계속 통과
+    - calc_financial_ratios 6개: 정상(300.0 / -5.0 / "정상"), 반올림 없음(100/30*100), 경계(자본=자본금 → 정상, 20 → 부분잠식·750.0), 완전잠식(자본 0·-50 → "완전잠식", debt_ratio None), 정보 없음(→ None·"NA"), dict 아님(→ ValueError)
+    - calc_termination_rate 4개: 정상(32/2370*100), 연초 0(→ None), 정보 없음·음수(→ None), dict 아님(→ ValueError)
+    - 연결 1개: 자본 -50 본사 → judge_risk_signals 결과 ["확인 필요", "위험", "주의", "정상"]
+    
+    [답변 형식]
+    1. 모호한 점이 있으면 질문 목록만 먼저 답해 주세요.
+    2. 없으면 signals.py에 추가할 코드만 주세요 (설명은 코드 뒤에 3줄 이내).
+    ```
+    
+- **생성 코드 위치:** 커밋 `dbf396f` (수정 전 원본, 생성 직후 pytest 17 pass)
+- **코드 리딩에서 발견한 결함 및 개선 사항:** (줄 번호는 `dbf396f` 기준)
+    1. **[결함]** 숫자가 아닌 값(예: CSV의 `"2,370"`)이 들어오면 `TypeError`로 멈춘다. `value_for`(`signals.py`:19-23, :82-86)가 None과 NaN만 걸러 내고 문자열은 그대로 통과시켜, 비교 연산(:97 `stores_begin < 0` 등)에서 에러가 난다. 프롬프트 [공통 규칙]에 "데이터 문제는 예외 대신 None/NA, 예외는 dict가 아닐 때만"이라고 명시했으므로 명세 위반이다. 직접 실행해서 확인했다 (`TypeError: '<' not supported between instances of 'str' and 'int'`).
+    2. **[개선점]** docstring 용어 부정확 (:68, :71, :74). 계산식은 해지 + 종료인데 "계약 종료율", "계약 종료 건수"라고만 써서 해지 건수가 포함된다는 것이 드러나지 않고, Args에 필요한 키 이름도 없다.
+    3. **[개선점]** `value_for` 도우미 함수가 두 함수 안에 똑같이 두 번 정의되어 있다 (:19-23, :82-86). 결함 1도 두 곳을 모두 고쳐야 했다.
+    4. **[개선점]** `stores_begin == 0 or stores_begin < 0` (:96-97)은 `stores_begin <= 0` 한 줄로 쓸 수 있다.
+    5. **[개선점]** NaN 검사를 `value != value`로 해서, 같은 파일 `judge_risk_signals`의 `math.isnan` 방식과 일관되지 않다.
+    - 개선점 2~5는 이번 사이클에서 수정하지 않고 기록만 했다. 이번 수정은 결함 1에 한정했다.
+- **회귀 테스트:** 커밋 `c362598`
+    - `test_regression_non_numeric_is_none` 추가. 수정 전 원본(`dbf396f`)에서 `TypeError`로 1 failed, 17 passed를 먼저 확인했다.
+    - 부채총계만 문자열일 때 부채비율만 `None`이 되고, 영업이익률(-5.0)과 자본잠식("정상")은 영향을 받지 않는지도 확인한다. 처음에 이 두 기대값을 잘못 적었다가(33.33, "NA") 계산식과 판단 순서를 다시 따라가 고쳤다.
+- **수정 내역:** 
+    1. `value_for` 두 곳의 조건을 `if not isinstance(value, (int, float)) or value != value:`로 바꿔 숫자가 아닌 값도 정보 없음(`None`)으로 처리했다.
+    2. 함수 시그니처와 개선점 2~5 관련 코드는 변경하지 않았다.
+- **수정 코드 위치:** 커밋 `8ef745a`
+- **테스트 결과:** `pytest 18 pass` (`tests/test_signals.py` 전체, 출력: `tests/signals_pytest_result.txt`)
+    - 정상: 부채비율·영업이익률 계산과 반올림 없음, 해지율 계산(가상 값 5.0%)
+    - 경계: 자본총계 = 자본금 → 정상, < 자본금 → 부분잠식, ≤ 0 → 완전잠식·부채비율 None, 연초 가맹점 0 → None
+    - 예외: 정보 없음·음수 → None/"NA", dict가 아닌 입력 → `ValueError`
+    - 연결: 완전잠식 본사의 계산 결과가 `judge_risk_signals`에서 부채비율 '확인 필요', 자본잠식 '위험'으로 판정
+    - 회귀: 숫자가 아닌 값 → None, 다른 지표는 영향 없음
+
+---
+
+## [llm_report]  — 2026-11-03
+
+- **작성자:** 이혜원
+- **사용 도구:** GitHub Copilot Chat
+- **프롬프트:**
+    ```
+    당신은 파이썬 백엔드 개발을 돕는 어시스턴트입니다. 프랜차이즈 예비 가맹점주를 위한 본사 재무·계약 위험 분석 서비스의 비전문가용 리포트 생성 함수를 구현해 주세요.
+    
+    [함수 시그니처 - 변경 금지]
+    def write_report(signals, payback_df, flags, user_type, llm_call) -> dict:
+    
+    [입력 명세]
+    ※ 각 입력의 구체적인 자료형과 내부 구조는 추후 확정 예정이므로, 설계 문서와 기존 코드를 확인하고 임의로 스키마를 확정하지 마세요.
+    - `signals`: 본사 재무·계약 위험 신호 목록 (`judge_risk_signals` 결과)
+    - `payback_df`: 보수·평균·낙관 시나리오별 회수 기간 DataFrame (`simulate_payback` 결과)
+    - `flags`: 문서 간 불일치 및 주의가 필요한 계약 조항 관련 결과 (`cross_check_documents` 및 LLM 조항 추출 함수의 결과)
+    - `user_type`: 사용자 유형 (`"예비"` 또는 `"기존"`)
+    - `llm_call`: 프롬프트 문자열을 입력받아 LLM 응답 문자열을 반환하는 함수
+    
+    [출력 명세]
+    다음 형식의 딕셔너리를 반환합니다.
+    {"summary": str, "checklist": list[str]}
+    - `summary`: 재무 위험 신호, 회수 기간, 문서 불일치 및 주의 조항을 비전문가가 이해하기 쉬운 한국어 문장으로 요약
+    - `checklist`: 사용자가 추가로 확인해야 할 사항을 구체적인 문장으로 작성
+    - `user_type`에 따라 설명의 초점을 조정
+        - 예비: 가맹 계약 전 위험 및 확인 사항
+        - 기존: 최근 재무 변화, 운영 및 계약 갱신·추가 출점 관련 사항
+        
+    [예외·경계 방침]
+    - 지원하지 않는 `user_type`은 기존 프로젝트 규약을 확인하고, 별도 규약이 없다면 `ValueError`를 발생시킬 것
+    - 입력 데이터가 없거나 일부 값이 결측된 경우 이를 임의로 정상 또는 위험으로 판단하지 말고 '확인 필요'로 구분할 것
+    - 빈 리스트가 검증 완료 후 발견 항목이 없다는 의미일 수 있으므로, 무조건 입력 누락으로 판단하지 말 것
+    - `payback_df` 내부의 `NaN`은 회수 기간을 계산할 수 없는 정상적인 분석 결과일 수 있으므로 DataFrame 전체가 비어 있는 것과 구분할 것
+    - LLM 호출 실패, JSON 파싱 실패, 응답 자료형 및 필수 필드 오류에 대응할 것
+    - LLM 보고서 생성 실패와 기존 Python 분석 실패를 혼동하지 말 것
+    - 대체 보고서를 반환할 때는 자동 보고서 생성 실패 사실과 실패 원인을 명확하게 알리고, 화면에 표시된 기존 분석 결과를 직접 확인하도록 안내할 것
+    
+    [제약 조건]
+    - 기존 프로젝트 의존성만 사용하고 별도 라이브러리를 추가하지 말 것
+    - 타입 힌트와 함수 docstring 작성
+    - 재무 지표 계산, 위험 판정, 회수 기간 계산 및 문서 교차 검증을 중복 구현하지 말 것
+    - LLM에는 기존 함수에서 전달받은 분석 결과만 설명하도록 요청할 것
+    - 입력에 없는 수치, 사실 및 법적 판단을 생성하지 않도록 할 것
+    - LLM 호출은 전달받은 `llm_call`만 사용하고, 실제 API 클라이언트를 새로 생성하지 말 것
+    - 기존 함수 시그니처와 반환 형식을 유지할 것
+    - 보조 함수는 필요한 경우에만 사용하고, 불필요하게 복잡한 입력 검증이나 중복 코드를 만들지 말 것
+    
+    [통과해야 할 테스트]
+    1. 정상 입력에서 `{"summary": str, "checklist": list[str]}` 형식으로 반환되는지 확인
+    2. 사용자 유형에 따라 보고서의 설명 초점이 달라지는지 확인
+    3. 재무 신호, 회수 기간 및 문서 검토 결과가 입력 자료에 근거하는지 확인
+    4. 입력 자료의 부재, 일부 결측 및 정상적인 빈 결과를 구분하는지 확인
+    5. 회수 기간이 `NaN`인 시나리오를 회수 불가 또는 확인 필요로 적절히 설명하는지 확인
+    6. LLM 호출 실패, 잘못된 JSON, 필수 필드 누락 및 잘못된 응답 자료형에 대응하는지 확인
+    7. LLM 보고서 생성에 실패해도 기존 분석 결과의 신뢰성에 문제가 있다고 잘못 안내하지 않는지 확인
+    8. 입력에 없는 수치나 사실을 생성하지 않는지 확인
+    
+    먼저 기존 프로젝트 코드와 설계 문서를 확인한 후 구현하세요. 아직 확정되지 않은 데이터 구조는 임의로 가정하지 말고, 확인이 필요한 사항을 제시하세요. 수정 후 pytest 테스트 코드도 작성해 주세요.
+    ```
+- **생성 코드 위치:** 커밋 `2f2f8be` (수정 전 원본)
+
+- **코드 리딩에서 발견한 결함 및 개선 사항:**
+    - 분석 결과에 Python 및 pandas 자료형이 혼합되어 있어 JSON 직렬화 과정에서 문제가 발생할 가능성이 있음을 확인했다.
+    - 투자 회수 기간의 uncertain 여부, NaN 값 및 빈 DataFrame이 명확히 구분되지 않으면 LLM이 회수 기간을 잘못 해석할 가능성이 있음을 확인했다.
+    - 빈 flags를 문서 검토 결과의 부재나 위험 요소가 없다는 의미로 잘못 해석할 가능성이 있음을 확인했다.
+    - 자동 보고서 생성에 실패했을 때 사용자가 기존 Python 분석 결과를 확인할 수 있도록 안내하는 기능을 보완할 필요가 있음을 확인했다.
+
+- **수정 내역:**
+    - _json_safe(): 중첩 자료형, 결측값 및 DataFrame을 JSON으로 변환하는 로직 개선
+    - _analysis_prompt():
+        - 입력 데이터의 필드와 의미를 구체적으로 설명하도록 프롬프트 개선
+        - uncertain, NaN, 빈 DataFrame을 구분하여 회수 기간의 잘못된 해석 방지
+        - 빈 flags를 자료 누락이나 위험 요소가 없다는 의미로 단정하지 않도록 지침 보완
+    - _fallback_report():
+        - 자동 보고서 생성 실패 시 기존 분석 결과를 직접 확인하도록 안내하는 사용자 유형별 체크리스트 제공
+        - 면책 문구 추가
+
+- **명세 보완 사항:**
+    - write_report()의 입력 및 출력 형식 구체화
+        - signals: 재무 위험 신호별 항목, 위험 수준, 값 및 판정 근거
+        - payback_df: 시나리오별 월 순이익, 투자 회수 기간 및 불확실성 여부
+        - flags: 문서 간 불일치 등의 검토 결과와 근거
+        - user_type: 예비 가맹점사업자(예비)와 기존 가맹점사업자(기존) 구분
+        - 반환값: 보고서 요약(summary)과 확인 사항 목록(checklist)
+    - 결측값과 빈 분석 결과의 의미를 구분하고, 확인되지 않은 정보를 정상으로 간주하지 않도록 처리 기준 보완
+    - LLM 호출 함수의 문자열 입력·문자열 출력 형식과 보고서 응답 JSON 구조 명확화
+    - LLM 호출 또는 응답 파싱 실패 시 기존 분석 결과와 보고서 생성 실패를 구분하도록 예외 처리 기준 보완
+
+- **수정 코드 위치:** 커밋 `ae263b1`
+
+- **테스트 결과:** `pytest 25 pass`
+    - 정상: 유효한 응답의 JSON 파싱 및 보고서 반환, 사용자 유형별 보고서 생성
+    - 경계: 빈 입력, 결측값, 빈 DataFrame 및 NaN 구분, Markdown 형식의 JSON 응답 처리
+    - 예외: 지원하지 않는 사용자 유형, LLM 호출 실패 및 잘못된 응답 형식에 대한 예외 처리와 fallback 반환
+    ```
+    PS C:\Users\emdqn\Workspace\02_projects\2610-2612_franchise-financial-health-check_sg> python -m pytest tests/test_llm_tasks.py -v
+    ================ test session starts =================
+    platform win32 -- Python 3.13.2, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\emdqn\AppData\Local\Programs\Python\Python313\python.exe
+    cachedir: .pytest_cache
+    rootdir: C:\Users\emdqn\Workspace\02_projects\2610-2612_franchise-financial-health-check_sg
+    collected 25 items                                    
+
+    tests/test_llm_tasks.py::test_write_report_returns_required_shape PASSED [  4%]
+    tests/test_llm_tasks.py::test_prompt_focus_changes_by_user_type PASSED [  8%]
+    tests/test_llm_tasks.py::test_unsupported_user_type_raises_value_error[invalid] PASSED [ 12%]
+    tests/test_llm_tasks.py::test_unsupported_user_type_raises_value_error[] PASSED [ 16%]
+    tests/test_llm_tasks.py::test_unsupported_user_type_raises_value_error[None] PASSED [ 20%]
+    tests/test_llm_tasks.py::test_prompt_contains_supplied_financial_payback_and_document_results PASSED [ 24%]
+    tests/test_llm_tasks.py::test_missing_values_are_distinguished_from_empty_results PASSED [ 28%]
+    tests/test_llm_tasks.py::test_empty_payback_dataframe_is_distinguished_from_nan_scenario PASSED [ 32%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-LLM \ud638\ucd9c \uc2e4\ud328] PASSED [ 36%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-JSON \ud30c\uc2f1 \uc2e4\ud328] PASSED [ 40%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-\uc751\ub2f5 \uc790\ub8cc\ud615 \uc624\ub958] PASSED [ 44%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-\ud544\uc218 \ud544\ub4dc \ub204\ub77d] PASSED [ 48%]
+    tests/test_llm_tasks.py::test_llm_failures_return_transparent_fallback[<lambda>-\uc790\ub8cc\ud615 \uc624\ub958] PASSED [ 52%]
+    tests/test_llm_tasks.py::test_markdown_fenced_json_is_accepted PASSED [ 56%]
+    tests/test_llm_tasks.py::test_json_safe_converts_nested_values_and_dataframe PASSED [ 60%]
+    tests/test_llm_tasks.py::test_json_safe_handles_empty_dataframe_boundary PASSED [ 64%]
+    tests/test_llm_tasks.py::test_json_safe_preserves_value_when_scalar_conversion_raises PASSED [ 68%]
+    tests/test_llm_tasks.py::test_analysis_prompt_includes_serialized_analysis_and_audience PASSED [ 72%]
+    tests/test_llm_tasks.py::test_analysis_prompt_preserves_empty_and_missing_inputs PASSED [ 76%]
+    tests/test_llm_tasks.py::test_analysis_prompt_rejects_unsupported_user_type PASSED [ 80%]
+    tests/test_llm_tasks.py::test_fallback_report_returns_user_type_specific_checklist PASSED [ 84%]
+    tests/test_llm_tasks.py::test_fallback_report_handles_empty_reason_boundary PASSED [ 88%]
+    tests/test_llm_tasks.py::test_fallback_report_propagates_reason_formatting_exception PASSED [ 92%]
+    tests/test_llm_tasks.py::test_write_report_with_shared_mock[\uc608\ube44-\uacc4\uc57d \uc804 \ucd5c\uc2e0 \uc7ac\ubb34\uc790\ub8cc\uc640 \uc815\ubcf4\uacf5\uac1c\uc11c\uc758 \uae30\uc7ac \ub0b4\uc6a9\uc744 \ud655\uc778\ud558\uc138\uc694.] PASSED [ 96%]
+    tests/test_llm_tasks.py::test_write_report_with_shared_mock[\uae30\uc874-\ucd5c\uadfc \uc7ac\ubb34 \uc2e0\ud638\uc640 \ud310\uc815 \uadfc\uac70\uc758 \ubcc0\ud654\ub97c \ud655\uc778\ud558\uc138\uc694.] PASSED [100%]
+
+    ================= 25 passed in 1.42s =================
+    ```
