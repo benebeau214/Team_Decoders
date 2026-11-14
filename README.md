@@ -73,5 +73,6 @@ python -m pytest tests/ -q
 ### 10주차 통합 테스트 (담당자 김리나)
 
 - 통합 테스트 파일은 [tests/test_pipeline.py](tests/test_pipeline.py)입니다.
-- `python -m pytest tests/ -q`로 전체 테스트 122개가 통과했습니다.
-- [최종 테스트 결과](tests/week10_pytest_result.txt)
+- `python -m pytest tests/ -v`로 전체 테스트 122개가 통과했습니다.
+- [최종 테스트 결과](tests/pytest_result_week10.txt)
+- [파이프라인 fixture(시연용 data/ CSV) 실행 로그](tests/pipeline_run_week10.txt)
