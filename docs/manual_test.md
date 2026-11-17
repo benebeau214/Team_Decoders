@@ -136,5 +136,4 @@
 
 - 실행 명령: `python -m pytest -v`
 - 결과 파일: `tests/pytest_result_week11.txt`
-- 통과/실패 수: `________` (마지막 머지 후 실행)
-- 비고: `________`
+
