@@ -44,7 +44,8 @@ def run_checkup(
 
 ### 3-2. `tables`
 
-`load_tables(root)`의 반환값이며, 형식은 `{CSV 파일명: DataFrame}`입니다. 필수 컬럼이 빠지면 `PipelineError`가 발생합니다.
+`load_tables(root)` 또는 `load_tables_from_uploads(uploaded_files)`(7절)의 반환값이며, 형식은 `{CSV 파일명: DataFrame}`입니다. 필수 컬럼이 빠지면 `PipelineError`가 발생합니다.
+필수 파일 목록(`CSV_NAMES`)과 필수 컬럼(`REQUIRED_COLUMNS`)은 `data_loader.py`에 정의된 값을 기준으로 합니다.
 
 | 파일 | 필수 컬럼 |
 |---|---|
@@ -109,3 +110,40 @@ python -m franchise_checkup.pipeline --brand <브랜드> --region <지역> --use
 ```
 
 인자를 생략하면 공통 브랜드와 지역 중 첫 번째 값을 씁니다.
+
+## 7. CSV 업로드 입력 (11주차, Streamlit 화면용)
+
+화면(`app.py`)은 사용자가 올린 CSV를 `data_loader.load_tables_from_uploads`로 읽어 `tables`를 만든 뒤 `run_checkup`에 넘깁니다.
+
+```python
+from franchise_checkup.data_loader import DataLoadError, load_tables_from_uploads
+
+tables = load_tables_from_uploads(uploaded_files)  # → run_checkup(user_input, tables)
+```
+
+### 7-1. 입력과 반환
+
+| 항목 | 내용 |
+|---|---|
+| 입력 | `uploaded_files`: Streamlit `UploadedFile` 목록 (`st.file_uploader(..., accept_multiple_files=True)`의 반환값) |
+| 읽는 방식 | 필수 CSV 5종을 UTF-8로 먼저 읽고, 실패하면 `seek(0)`으로 파일 포인터를 처음으로 되돌린 뒤 CP949로 다시 읽음 |
+| 반환 | 기존 `load_tables()`와 같은 `dict[str, pandas.DataFrame]` (키는 3-2절의 파일명 5개) |
+| 기준 목록 | `data_loader.py`의 `CSV_NAMES`, `REQUIRED_COLUMNS` |
+
+### 7-2. 예외 (`DataLoadError`)
+
+아래 경우는 모두 `DataLoadError`가 발생하며, 오류 메시지에 **파일명과 원인**을 넣습니다. 화면은 이 메시지를 `st.error`로 보여 주고 분석을 멈춥니다.
+
+| 경우 | 메시지 예시 |
+|---|---|
+| 필수 파일 누락 | `audit_notes.csv 파일이 없습니다.` |
+| 같은 파일명 중복 | `hq_financials.csv 파일이 2개 업로드되었습니다.` |
+| 빈 파일 | `region_sales.csv 파일이 비어 있습니다.` |
+| 파싱·디코딩 실패 | `franchise_disclosure.csv를 UTF-8 또는 CP949로 읽을 수 없습니다.` |
+| 필수 컬럼 누락 | `hq_financials.csv에 필수 컬럼 'total_liabilities'가 없습니다.` |
+
+메시지 문구는 예시이며, 실제 문구는 `data_loader.py` 구현을 따릅니다.
+
+### 7-3. 검증용 데이터셋
+
+수동 검증 3개 시나리오에 쓰는 데이터셋은 `sample_data/`에 있습니다. 구성과 확인 방법은 `sample_data/README.md`를 참고하세요.
