@@ -8,7 +8,12 @@ import re
 from typing import Any
 
 import pandas as pd
-from franchise_checkup.data_loader import load_csv_table, select_avg_sales
+from franchise_checkup.data_loader import (
+    CSV_NAMES,
+    REQUIRED_COLUMNS,
+    load_csv_table,
+    select_avg_sales,
+)
 from franchise_checkup.llm_tasks import write_report
 from llm_client import llm_call
 
@@ -46,13 +51,6 @@ except ImportError as error:
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CSV_NAMES = (
-    "hq_financials.csv",
-    "franchise_disclosure.csv",
-    "region_sales.csv",
-    "audit_notes.csv",
-    "disclosure_clauses.csv",
-)
 
 # These are the V1 reference values documented in design_doc_v1.md and its
 # acceptance cases. The existing judge/simulator functions require these as
@@ -67,21 +65,6 @@ PAYBACK_SCENARIOS = {
     "보수": {"sales_factor": 0.8, "margin": 0.05},
     "평균": {"sales_factor": 1.0, "margin": 0.10},
     "낙관": {"sales_factor": 1.2, "margin": 0.15},
-}
-
-REQUIRED_COLUMNS = {
-    "hq_financials.csv": [
-        "brand", "year", "total_liabilities", "total_equity", "capital_stock",
-        "revenue", "operating_income",
-    ],
-    "franchise_disclosure.csv": [
-        "brand", "year", "startup_cost", "avg_annual_sales", "stores_begin",
-        "contract_terminated", "contract_ended", "related_party", "relationship",
-        "transaction_type", "amount",
-    ],
-    "region_sales.csv": ["brand", "year", "region", "avg_annual_sales"],
-    "audit_notes.csv": ["brand", "year", "note_text"],
-    "disclosure_clauses.csv": ["brand", "year", "clause_text"],
 }
 
 USER_INPUT_KEYS = (
