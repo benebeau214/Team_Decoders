@@ -24,4 +24,9 @@ Streamlit 화면의 CSV 업로드 기능을 검증하기 위한 데이터셋 3�
 - ①과 ②: 둘 다 정상으로 읽혔고, 브랜드 3개 모두 분석이 끝났으며, 두 결과가 완전히 같았습니다.
 - ③: `total_liabilities` 컬럼이 없다는 오류로 멈췄습니다.
 
+리나님 업로드 로더(`load_tables_from_uploads`, PR #24)가 main에 들어온 뒤 같은 방식으로 다시 확인했습니다.
+
+- ①과 ②: 정상 적재, 두 결과 동일
+- ③: `DataLoadError: hq_financials.csv에 필수 열 'total_liabilities'가 없습니다.`
+
 화면에서의 최종 검증 결과는 `docs/manual_test.md`에 기록합니다.

@@ -134,15 +134,16 @@ tables = load_tables_from_uploads(uploaded_files)  # → run_checkup(user_input,
 
 아래 경우는 모두 `DataLoadError`가 발생하며, 오류 메시지에 **파일명과 원인**을 넣습니다. 화면은 이 메시지를 `st.error`로 보여 주고 분석을 멈춥니다.
 
-| 경우 | 메시지 예시 |
+| 경우 | 메시지 |
 |---|---|
-| 필수 파일 누락 | `audit_notes.csv 파일이 없습니다.` |
-| 같은 파일명 중복 | `hq_financials.csv 파일이 2개 업로드되었습니다.` |
+| 필수 파일 누락 | `필수 파일이 누락되었습니다: audit_notes.csv, region_sales.csv` (빠진 파일을 한 번에 모두 표시) |
+| 같은 파일명 중복 | `hq_financials.csv 파일이 중복 업로드되었습니다.` |
 | 빈 파일 | `region_sales.csv 파일이 비어 있습니다.` |
-| 파싱·디코딩 실패 | `franchise_disclosure.csv를 UTF-8 또는 CP949로 읽을 수 없습니다.` |
-| 필수 컬럼 누락 | `hq_financials.csv에 필수 컬럼 'total_liabilities'가 없습니다.` |
+| 디코딩 실패 | `franchise_disclosure.csv 파일을 UTF-8 또는 CP949로 읽을 수 없습니다.` |
+| CSV 형식 오류 | `franchise_disclosure.csv CSV 형식이 올바르지 않습니다.` |
+| 필수 열 누락 | `hq_financials.csv에 필수 열 'total_liabilities'가 없습니다.` |
 
-메시지 문구는 예시이며, 실제 문구는 `data_loader.py` 구현을 따릅니다.
+메시지는 `data_loader.py`(PR #24) 구현 기준입니다. 파일명 부분은 실제 업로드한 파일 이름으로 바뀝니다.
 
 ### 7-3. 검증용 데이터셋
 
