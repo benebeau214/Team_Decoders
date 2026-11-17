@@ -1,21 +1,3 @@
-"""Backend workflow for the franchise financial health check.
-
-This module has no Streamlit dependency. ``app.py`` (UI) and the tests call
-``run_checkup`` directly, and ``python pipeline.py`` runs the whole workflow
-from the command line.
-
-Workflow (``run_checkup``)::
-
-    user input + CSV tables
-      -> common reference year selection
-      -> financial ratios / termination rate -> risk signals
-      -> data freshness warnings
-      -> document review (LLM extraction + cross-check)
-      -> payback simulation
-      -> non-expert report (LLM)
-      -> result dict
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -108,9 +90,10 @@ USER_INPUT_KEYS = (
 
 
 class PipelineError(Exception):
-    """The workflow cannot continue (missing data, no common year, import failure).
+    """분석을 계속할 수 없을 때 발생한다 (자료 누락, 공통 기준연도 없음 등).
 
-    ``warnings`` carries the non-fatal data notes collected before the failure.
+    Attributes:
+        warnings: 오류가 나기 전까지 모인 자료 경고 목록.
     """
 
     def __init__(self, message: str, warnings: list[str] | None = None) -> None:
@@ -134,14 +117,17 @@ def _find_csv(root: Path, name: str) -> Path:
 
 
 def load_tables(root: str) -> dict[str, pd.DataFrame]:
-    """Load every required CSV.
+    """필수 CSV 5종을 읽어 파일명 → DataFrame dict로 반환한다.
 
     Args:
-        root: Project root directory.
+        root: 프로젝트 루트 경로.
+
     Returns:
-        ``{csv file name: DataFrame}`` for each name in ``REQUIRED_COLUMNS``.
+        {"hq_financials.csv": DataFrame, ...} (REQUIRED_COLUMNS의 파일 전부).
+
     Raises:
-        FileNotFoundError / ValueError / OSError: a CSV is missing, duplicated or malformed.
+        FileNotFoundError: 파일을 찾을 수 없음.
+        ValueError: 파일이 중복되거나 형식·컬럼이 올바르지 않음.
     """
     project_root = Path(root).resolve()
     tables: dict[str, pd.DataFrame] = {}
@@ -233,13 +219,14 @@ def _one_row(
 
 
 def common_brands(financial: pd.DataFrame, disclosure: pd.DataFrame) -> list[str]:
+    """본사 재무와 정보공개서에 모두 자료가 있는 브랜드명 목록을 반환한다."""
     financial_brands = set(financial["brand"].dropna().astype(str).str.strip())
     disclosure_brands = set(disclosure["brand"].dropna().astype(str).str.strip())
     return sorted(brand for brand in financial_brands & disclosure_brands if brand)
 
 
 def list_regions(region_table: pd.DataFrame) -> list[str]:
-    """Sorted, de-duplicated region names from the region sales table."""
+    """지역별 매출 표에서 중복 없이 정렬한 지역명 목록을 반환한다."""
     return sorted({v.strip() for v in region_table["region"].dropna().astype(str) if v.strip()})
 
 
@@ -339,21 +326,25 @@ def run_checkup(
     tables: dict[str, pd.DataFrame],
     call_llm: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
-    """Run the full analysis workflow and return every result the UI shows.
+    """재무·계약 분석부터 보고서 작성까지 전체 워크플로우를 실행한다.
 
     Args:
-        user_input: ``brand, region, deposit, key_money, loan_amount, loan_rate, user_type``
-            (already validated by ``validate_user_input``).
-        tables: output of ``load_tables``.
-        call_llm: ``prompt -> response`` function. Defaults to ``llm_client.llm_call``.
+        user_input: validate_user_input을 통과한 사용자 입력.
+        tables: load_tables의 반환값.
+        call_llm: 프롬프트(str)를 받아 JSON 문자열을 반환하는 함수.
+            None이면 llm_client.llm_call을 사용한다.
+
     Returns:
-        dict with ``user_input, year, year_summary, fin_row, disc_row, ratios,
-        termination_rate, signals, freshness, review_flags, audit_text, clause_text,
-        avg_sales_info, payback_df, report, warnings``. ``payback_df`` and ``report``
-        are None when that step fails; the other results are still returned.
+        화면이 필요로 하는 모든 결과를 담은 dict. 키는 user_input, year,
+        year_summary, fin_row, disc_row, ratios, termination_rate, signals,
+        freshness, review_flags, audit_text, clause_text, avg_sales_info,
+        payback_df, report, warnings (자세한 구조는 docs/schema.md).
+        회수 기간 계산이나 보고서 작성이 실패하면 payback_df, report는 None이고
+        나머지 결과는 그대로 반환한다.
+
     Raises:
-        PipelineError: input/tables are unusable, the brand has no data, there is no
-            common reference year, or the base-year rows are missing/duplicated.
+        PipelineError: 분석 모듈 import 실패, 입력·필수 컬럼 누락,
+            브랜드 자료 없음, 공통 기준연도 없음, 기준연도 행 누락·중복.
     """
     call_llm = call_llm or llm_call
     warnings: list[str] = []
@@ -467,7 +458,11 @@ def run_checkup(
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Command-line entry point: run the workflow once and print a summary."""
+    """명령행에서 파이프라인을 한 번 실행하고 요약을 출력한다.
+
+    Returns:
+        성공이면 0, 실패이면 1.
+    """
     parser = argparse.ArgumentParser(description="프랜차이즈 재무 건강검진 파이프라인")
     parser.add_argument("--brand", help="브랜드명 (기본: 공통 브랜드 중 첫 번째)")
     parser.add_argument("--region", help="지역명 (기본: 첫 번째 지역)")
