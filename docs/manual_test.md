@@ -1,7 +1,7 @@
 # 11주차 수동 검증 기록 (Team Decoders)
 
 - 검증자: 오채윤
-- 검증 대상 커밋: `________` (검증 시작 시점의 main 해시를 기재)
+- 검증 대상 커밋: `2c658ca4668705617cc710a26236bdba686bee8d`(검증 시작 시점의 main 해시를 기재)
 - 검증 환경: OS Windows 11 Home / Python 3.13.15 / streamlit 1.67.0 / `USE_MOCK=true`
 - 실행 명령: `python -m streamlit run franchise_checkup/app.py`
 - 사용 데이터: `sample_data/` 하위 3개 폴더 (영효 작성)
@@ -44,9 +44,9 @@
 | 데이터셋 | `sample_data/utf8_normal/` (CSV 5종) |
 | 절차 | 1) 앱 실행 직후 화면을 확인한다. 2) CSV 5종을 드래그 앤 드롭한다. 3) 공통 입력값을 넣고 분석을 실행한다. |
 | 예상 결과 | 업로드 전에는 필수 파일 5종 안내가 나오고 이후 화면은 그려지지 않는다. 업로드 후 위 백엔드 결과와 같은 값이 `st.metric`, 차트, `st.dataframe`으로 표시된다. |
-| 실제 결과 | |
-| 캡처 | `docs/screenshots/01_before_upload.png`, `docs/screenshots/01_utf8_result.png` |
-| 관찰 내용 | |
+| 실제 결과 |**통과.** 업로드 전 필수 파일 5종 안내 후 화면 중단 확인. 업로드 후 공통 입력값(대출금 0, 금리 0)으로 자동 분석됨.<br>metric: 부채비율 75.0% · 영업이익률 8.0% · 계약 해지율 5.0% (모두 정상), 기준 연도 2024년<br>차트·표: 보수 176.6 / 평균 70.7 / 낙관 39.3개월 — 백엔드 기준값과 일치<br>업로드 데이터 미리보기 탭에 st.dataframe 원본 표 표시, 보고서에 [MOCK] 표 |
+| 캡처 | `01_before_upload.png`, `01_utf8_result.png`, `01_utf8_payback_table.png`, `01_utf8_preview.png`, `01_utf8_report.png` |
+| 관찰 내용 | ① 분석 실행 버튼 없이 업로드·입력 변경 즉시 자동 분석됨 (역할 분배 문서 3번 "버튼 실행 유지"와 다름)<br>② metric의 등급 표시에 ↑ 화살표가 붙어 값 상승으로 오해될 수 있음<br>③ 차트 x축 라벨이 세로로 표시되고 순서가 낙관·보수·평균(가나다순)<br>④ 차트 축 제목이 영문 열 이름(payback_months, scenario) 그대로 <br>⑤ 차트(낙관·보수·평균)와 아래 표(보수·평균·낙관)의 시나리오 순서가 서로 다름<br>⑥ 회수 기간 표의 열 이름이 영문(monthly_net_profit, uncertain)이고, uncertain은 체크박스로만 표시되어 의미가 드러나지 않음|
 
 ## 시나리오 2. 정상 cp949 CSV
 
