@@ -1,0 +1,26 @@
+[theme]
+# 앱의 주요 강조 색상 (버튼, 액센트 등)
+primaryColor = "#2563eb"
+
+# 전체 페이지 배경 색상
+backgroundColor = "#f8fafc"
+
+# 사이드바 및 위젯(컨테이너, 카드 등) 배경 색상
+secondaryBackgroundColor = "#f1f5f9"
+
+# 기본 텍스트 색상
+textColor = "#191c1e"
+
+# 폰트 스타일 ("sans serif", "serif", "monospace" 중 선택)
+font = "sans serif"
+
+[server]
+# 파일 업로드 최대 용량 (MB 단위). 기본값은 200MB이지만 대용량 CSV나 다중 파일 업로드 시 명시하면 안전.
+maxUploadSize = 200
+
+# 클라우드/서버 환경 배포 시 브라우저 자동 실행 여부 (서버 배포 환경에서는 true 유지)
+headless = true
+
+# CORS 설정 및 보안 옵션
+enableCORS = false
+enableXsrfProtection = true
