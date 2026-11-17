@@ -120,6 +120,17 @@ def main() -> None:
     )
 
     if not uploaded_files:
+        for key in (
+            "tables",
+            "upload_signature",
+            "upload_error",
+            "checkup_result",
+            "last_input",
+            "selected_brand",
+            "selected_region",
+            "preview_table_name",
+        ): st.session_state.pop(key, None)
+
         st.warning(
             "분석을 시작하려면 사이드바에서 필수 CSV 파일 5종을 업로드해 주세요."
         )
@@ -221,19 +232,19 @@ def main() -> None:
 
     st.sidebar.subheader("투자 조건 설정")
     deposit = st.sidebar.number_input(
-        "임차 보증금",
+        "임차 보증금 (만원)",
         min_value=0.0,
         value=2000.0,
         step=100.0,
     )
     key_money = st.sidebar.number_input(
-        "영업 권리금",
+        "영업 권리금 (만원)",
         min_value=0.0,
         value=3000.0,
         step=100.0,
     )
     loan_amount = st.sidebar.number_input(
-        "창업 대출금",
+        "창업 대출금 (만원)",
         min_value=0.0,
         value=5000.0,
         step=100.0,
