@@ -2,11 +2,22 @@
 
 - 검증자: 오채윤
 - 검증 대상 커밋: `________` (검증 시작 시점의 main 해시를 기재)
-- 검증 환경: OS `________` / Python `________` / streamlit `________` / `USE_MOCK=true`
-- 실행 명령: `streamlit run franchise_checkup/app.py`
+- 검증 환경: OS Windows 11 Home / Python 3.13.15 / streamlit 1.67.0 / `USE_MOCK=true`
+- 실행 명령: `python -m streamlit run franchise_checkup/app.py`
 - 사용 데이터: `sample_data/` 하위 3개 폴더 (영효 작성)
 
 작성 원칙: 각 시나리오는 실행 직후에 바로 기록한다. "예상 결과"는 실행 전에 적고, "실제 결과"와 "관찰 내용"은 화면을 본 뒤에 적는다.
+
+## 사전 확인: Mock 모드 실행 (11/17, 업로드 기능 반영 전 main `2776d82`)
+
+
+| 항목 | 결과 | 비고 |
+| --- | --- | --- |
+| `streamlit run franchise_checkup/app.py` | 실패 | ModuleNotFoundError: No module named 'franchise_checkup' |
+| `python -m streamlit run franchise_checkup/app.py` | 성공 | 브라우저(localhost:8501)에 앱 화면 표시, 터미널 오류 없음 |
+| 공통 입력값으로 분석 실행 | 성공 | 분석 버튼 클릭 후 결과 화면 표시 |
+| 화면 값이 백엔드 기준값과 일치 | 성공 | 부채비율 75.0, 회수 기간 176.6 / 70.7 / 39.3개월 확인 |
+| 리포트에 `[MOCK]` 표식 | 성공 | 리포트 요약 앞에 [MOCK] 표시 |
 
 ## 공통 입력값
 
