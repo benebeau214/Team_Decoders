@@ -1,0 +1,1 @@
+"""Franchise checkup application package."""
