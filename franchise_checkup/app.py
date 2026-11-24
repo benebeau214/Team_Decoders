@@ -80,6 +80,17 @@ def format_percent(value: SupportsFloat | str | None) -> str:
     return f"{numeric_value:,.1f}%"
 
 
+def format_signal_value(item, value) -> str:
+    """재무 신호 표의 '값' 열에 표시할 문자열을 만든다."""
+    if item == "자본잠식":
+        # value는 "정상" / "부분잠식" / "완전잠식" / "NA" 중 하나
+        if not value or value == "NA":
+            return "확인 필요"
+        return value
+    # 나머지(부채비율·영업이익률·계약 해지율)는 비율 숫자
+    return format_percent(value)
+
+
 def main() -> None:
     """CSV 업로드, 분석 실행, 진단 결과 표시를 담당하는 Streamlit 진입점.
 
@@ -419,12 +430,16 @@ def main() -> None:
         st.markdown("### 본사 재무 및 계약 위험 신호 판정")
 
         if signals:
+            signal_rows = [
+                {**signal, "value": format_signal_value(signal["item"], signal["value"])}
+                for signal in signals
+            ]
             st.dataframe(
-                signals,
+                signal_rows,
                 column_config={
                     "item": st.column_config.TextColumn("항목"),
                     "level": st.column_config.TextColumn("위험 수준"),
-                    "value": st.column_config.NumberColumn("값"),
+                    "value": st.column_config.TextColumn("값"),
                     "reason": st.column_config.TextColumn(
                         "판정 근거",
                         width="large",
