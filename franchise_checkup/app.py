@@ -25,6 +25,7 @@ from franchise_checkup.pipeline import (
     list_regions,
     run_checkup,
 )
+from franchise_checkup.payback import UNCERTAIN_MONTHS
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,15 @@ def format_signal_value(item, value) -> str:
         return value
     # 나머지(부채비율·영업이익률·계약 해지율)는 비율 숫자
     return format_percent(value)
+
+
+def describe_payback(months) -> str:
+    """회수 기간(개월)을 사용자가 읽을 판정 문구로 바꾼다."""
+    if months is None or math.isnan(months):
+        return "회수 불가 (월 순이익 0 이하)"
+    if months > UNCERTAIN_MONTHS:
+        return f"회수 불확실 ({UNCERTAIN_MONTHS}개월 초과)"
+    return f"{UNCERTAIN_MONTHS}개월 이내"
 
 
 def main() -> None:
@@ -413,13 +423,28 @@ def main() -> None:
                         x="scenario",
                         y="payback_months",
                     )
+                    st.caption(
+                        f"{UNCERTAIN_MONTHS}개월(5년)을 넘는 시나리오는 "
+                        "투자금 회수가 불확실한 것으로 봅니다."
+                    )
                 else:
                     st.info("산출 가능한 유효한 회수 기간 데이터가 없습니다.")
             else:
                 st.warning("차트에 필요한 데이터 컬럼이 없습니다.")
 
+            # 체크박스뿐인 uncertain 열 대신 판정 문구 열을 보여준다.
+            payback_display = payback_df.drop(columns="uncertain", errors="ignore")
+            if "payback_months" in payback_display.columns:
+                payback_display = payback_display.assign(
+                    **{
+                        "회수 판단": payback_display["payback_months"].map(
+                            describe_payback
+                        )
+                    }
+                )
+
             st.dataframe(
-                payback_df,
+                payback_display,
                 use_container_width=True,
                 hide_index=True,
             )
