@@ -84,7 +84,7 @@
 
 - **수정 후 화면**
 
-[수정 후 화면](screenshots/B3_after.png) -->
+[수정 후 화면](screenshots/B3_after.png)
 
 - **해당 수정의 커밋 해시**: `[c22c7fa]`
 
