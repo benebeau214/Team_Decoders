@@ -213,7 +213,11 @@ def main() -> None:
             if "중복 업로드" in str(error):
                 message += " 중복된 파일은 하나씩만 남겨 주세요."
             if missing:
-                message += f" {', '.join(missing)}를 추가로 업로드해 주세요."
+                upload_hint = f"{', '.join(missing)}를 추가로 업로드해 주세요."
+                if str(error).startswith("필수 파일이 누락되었습니다:"):
+                    message = f"데이터 적재 오류: {upload_hint}"
+                else:
+                    message += f" {upload_hint}"
             elif "중복 업로드" not in str(error):
                 message += " 해당 CSV의 내용을 확인한 뒤 다시 업로드해 주세요."
             st.session_state.upload_error = (upload_signature, message, False)
