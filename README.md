@@ -76,3 +76,42 @@ python -m pytest tests/ -q
 - `python -m pytest tests/ -v`로 전체 테스트 122개가 통과했습니다.
 - [최종 테스트 결과](tests/pytest_result_week10.txt)
 - [파이프라인 fixture(시연용 data/ CSV) 실행 로그](tests/pipeline_run_week10.txt)
+
+---
+
+## 11주차 
+### 설치 및 실행
+
+저장소 루트에서 아래 명령을 실행합니다.
+
+```bash
+pip install -r requirements.txt
+python -m streamlit run franchise_checkup/app.py
+```
+
+강의자료의 `app.py`는 팀 저장소의 `franchise_checkup/app.py`(Streamlit 화면)에, `backend.py`는 `data_loader.py`, `payback.py`, `signals.py` 등 팀의 데이터 처리·분석 모듈에 해당합니다.
+
+### CSV 업로드
+CSV 업로드 기능을 검증하기 위한 데이터셋 3종
+`cp949_normal,missing_column,utf8_normal`  
+
+앱의 각 업로드 항목에 대응하는 CSV를 넣습니다. 샘플 CSV는 저장소의 `sample_data/` 아래 `cp949_normal,missing_column,utf8_normal` 폴더에서 확인할 수 있습니다.
+
+| CSV 목록 |
+| --- |
+| `hq_financials.csv` | 
+|`franchise_disclosure.csv` |
+| `region_sales.csv` |
+| `audit_notes.csv` |
+| `disclosure_clauses.csv` |
+
+ 검증용 데이터셋 관련 자세한 사항은 [README](sample_data/README.md) 참고
+
+### `st.session_state` 사용 이유
+
+Streamlit은 위젯의 값이 변경될 때마다 앱을 다시 실행하므로, 업로드한 데이터와 분석 결과가 불필요하게 초기화되거나 반복 처리되지 않도록 `st.session_state`를 활용했습니다. 업로드 파일의 식별값과 DataFrame을 세션에 저장하여 동일한 파일을 다시 읽는 것을 방지하고, 분석 결과와 마지막 입력 조건을 함께 관리합니다. 새로운 파일이 업로드되면 기존 데이터를 초기화하고, 입력 조건이 변경되거나 재분석 버튼을 누르면 분석 결과를 갱신하도록 구현했습니다.  
+
+### 11주차 수동 검증
+
+[수동 검증 결과 및 실행 화면](docs/manual_test.md)에서 정상 CSV, CP949 인코딩 CSV, 필수 컬럼이 누락된 CSV의 실행 결과와 관찰 내용을 확인할 수 있습니다.
+

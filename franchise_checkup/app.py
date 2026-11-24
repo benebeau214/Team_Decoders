@@ -96,6 +96,17 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
 
+    # 앱이 직접 사용하는 상태 키는 세션별 첫 실행에서 명시적으로 초기화한다.
+    for key, initial_value in {
+        "tables": None,
+        "upload_signature": None,
+        "upload_error": None,
+        "checkup_result": None,
+        "last_input": None,
+    }.items():
+        if key not in st.session_state:
+            st.session_state[key] = initial_value
+
     st.title("프랜차이즈 본사 재무 건강검진 대시보드")
     st.markdown(
         "공개 공시 데이터를 활용한 가맹본부 재무 위험 진단 및 "
@@ -115,6 +126,17 @@ def main() -> None:
     )
 
     if not uploaded_files:
+        for key in (
+            "tables",
+            "upload_signature",
+            "upload_error",
+            "checkup_result",
+            "last_input",
+            "selected_brand",
+            "selected_region",
+            "preview_table_name",
+        ): st.session_state.pop(key, None)
+
         st.warning(
             "분석을 시작하려면 사이드바에서 필수 CSV 파일 5종을 업로드해 주세요."
         )
@@ -140,21 +162,21 @@ def main() -> None:
 
         st.stop()
 
-    cached_signature = st.session_state.get("upload_signature")
+    cached_signature = st.session_state["upload_signature"]
 
-    if cached_signature != upload_signature:
+    # 서명만 남고 테이블 캐시가 없는 세션 상태도 새 업로드처럼 복구한다.
+    if (
+        cached_signature != upload_signature
+        or st.session_state["tables"] is None
+    ):
         # 새 파일 조합을 불러오기 전에 이전 데이터 및 관련 위젯 상태를 초기화한다.
-        for key in (
-            "tables",
-            "upload_signature",
-            "upload_error",
-            "checkup_result",
-            "last_input",
-            "selected_brand",
-            "selected_region",
-            "preview_table_name",
-        ):
+        for key in ("selected_brand", "selected_region", "preview_table_name"):
             st.session_state.pop(key, None)
+        st.session_state["tables"] = None
+        st.session_state["upload_signature"] = None
+        st.session_state["upload_error"] = None
+        st.session_state["checkup_result"] = None
+        st.session_state["last_input"] = None
 
         try:
             tables = load_tables_from_uploads(uploaded_files)
@@ -183,7 +205,7 @@ def main() -> None:
 
     else:
         # 동일한 파일이면 이전에 읽어 둔 DataFrame을 재사용한다.
-        tables = st.session_state.tables
+        tables = st.session_state["tables"]
 
     # 3. 분석 대상 브랜드 및 지역 선택지 생성
     brands = common_brands(
@@ -216,19 +238,19 @@ def main() -> None:
 
     st.sidebar.subheader("투자 조건 설정")
     deposit = st.sidebar.number_input(
-        "임차 보증금",
+        "임차 보증금 (만원)",
         min_value=0.0,
         value=2000.0,
         step=100.0,
     )
     key_money = st.sidebar.number_input(
-        "영업 권리금",
+        "영업 권리금 (만원)",
         min_value=0.0,
         value=3000.0,
         step=100.0,
     )
     loan_amount = st.sidebar.number_input(
-        "창업 대출금",
+        "창업 대출금 (만원)",
         min_value=0.0,
         value=5000.0,
         step=100.0,
@@ -281,8 +303,8 @@ def main() -> None:
                 st.session_state.last_input = current_input.copy()
 
             except PipelineError as error:
-                st.session_state.pop("checkup_result", None)
-                st.session_state.pop("last_input", None)
+                st.session_state["checkup_result"] = None
+                st.session_state["last_input"] = None
                 st.error(f"분석 실행 중 오류 발생: {error}")
 
                 for warning in error.warnings:
@@ -291,15 +313,15 @@ def main() -> None:
 
             except Exception:
                 logger.exception("Unexpected error while running the checkup")
-                st.session_state.pop("checkup_result", None)
-                st.session_state.pop("last_input", None)
+                st.session_state["checkup_result"] = None
+                st.session_state["last_input"] = None
                 st.error(
                     "예기치 못한 오류로 분석을 완료하지 못했습니다. "
                     "입력 조건과 업로드한 데이터를 확인해 주세요."
                 )
                 return
 
-    result = st.session_state.get("checkup_result")
+    result = st.session_state["checkup_result"]
     if result is None:
         st.info("사이드바에서 분석 조건을 설정해 주세요.")
         return
