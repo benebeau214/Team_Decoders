@@ -387,6 +387,7 @@ def main() -> None:
         value=format_percent(debt_item.get("value")),
         delta=debt_level or "확인 필요",
         delta_color="inverse" if debt_level in ["주의", "위험"] else "normal",
+        delta_arrow="off",
     )
 
     margin_level = margin_item.get("level")
@@ -395,6 +396,7 @@ def main() -> None:
         value=format_percent(margin_item.get("value")),
         delta=margin_level or "확인 필요",
         delta_color="inverse" if margin_level in ["주의", "위험"] else "normal",
+        delta_arrow="off",
     )
 
     term_level = term_item.get("level")
@@ -403,6 +405,7 @@ def main() -> None:
         value=format_percent(term_item.get("value")),
         delta=term_level or "확인 필요",
         delta_color="inverse" if term_level in ["주의", "위험"] else "normal",
+        delta_arrow="off",
     )
 
     col4.metric(
