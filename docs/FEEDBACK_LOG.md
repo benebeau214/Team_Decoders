@@ -75,7 +75,7 @@
 
   필수 CSV 5종을 업로드한 뒤 `audit_notes.csv`와 `region_sales.csv`를 한 번씩 더 올려 총 7개 파일로 재현했다. 두 파일명이 모두 중복이었지만, 오류 메시지에는 `region_sales.csv`만 표시됐다.
 
-  [두 파일명이 중복됐지만 region_sales.csv만 안내한 수정 전 화면](screenshots/B3_before.png)
+  ![두 파일명이 중복됐지만 region_sales.csv만 안내한 수정 전 화면](screenshots/B3_before.png)
 
 - **수정 내용과 근거**
 
@@ -84,9 +84,9 @@
 
 - **수정 후 화면**
 
-[수정 후 화면](screenshots/B3_after.png)
+![수정 후 화면](screenshots/B3_after.png)
 
-- **해당 수정의 커밋 해시**: `[c22c7fa]`
+- **해당 수정의 커밋 해시**: `c22c7fa`
 
 ---
 
@@ -101,7 +101,7 @@
 
   필수 CSV 5종 중 `region_sales.csv`를 제외한 4개를 업로드해 오류를 재현했다. 화면에는 `필수 파일이 누락되었습니다: region_sales.csv`라는 오류가 표시됐고, 첫 화면에 있던 필수 CSV 5종 목록은 사라졌다. 누락된 파일을 추가로 업로드하라는 안내도 없었다.
 
-  [region_sales.csv 누락 오류가 뜨면서 필수 CSV 5종 목록이 사라진 수정 전 화면](screenshots/U10_before.png)
+  ![region_sales.csv 누락 오류가 뜨면서 필수 CSV 5종 목록이 사라진 수정 전 화면](screenshots/U10_before.png)
 
 - **수정 내용과 근거**
 
@@ -110,9 +110,9 @@
 
 - **수정 후 화면**
 
-[수정 후 화면](screenshots/U10_after.png)
+![수정 후 화면](screenshots/U10_after.png)
 
-- **해당 수정의 커밋 해시**: `[63d310e]`
+- **해당 수정의 커밋 해시**: `63d310e`
 
 ---
 
