@@ -45,13 +45,19 @@ def load_tables_from_uploads(
         raise DataLoadError("업로드 파일 목록을 읽을 수 없습니다.") from error
 
     files_by_name: dict[str, Any] = {}
+    duplicate_names: set[str] = set()
     for uploaded_file in files:
         name = getattr(uploaded_file, "name", None)
         if not isinstance(name, str) or not name.strip():
             raise DataLoadError("업로드 파일 이름을 확인할 수 없습니다.")
         if name in files_by_name:
-            raise DataLoadError(f"{name} 파일이 중복 업로드되었습니다.")
+            duplicate_names.add(name)
+            continue
         files_by_name[name] = uploaded_file
+
+    if duplicate_names:
+        names = ", ".join(sorted(duplicate_names))
+        raise DataLoadError(f"{names} 파일이 중복 업로드되었습니다.")
 
     missing_files = [name for name in CSV_NAMES if name not in files_by_name]
     if missing_files:

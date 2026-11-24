@@ -101,6 +101,10 @@ def describe_payback(months) -> str:
     return f"{UNCERTAIN_MONTHS}개월 이내"
 
 
+def _show_csv_list() -> None:
+    st.info("**필요한 CSV 파일 목록:**\n" + "\n".join(f"- `{name}`" for name in CSV_NAMES))
+
+
 def main() -> None:
     """CSV 업로드, 분석 실행, 진단 결과 표시를 담당하는 Streamlit 진입점.
 
@@ -161,10 +165,7 @@ def main() -> None:
         st.warning(
             "분석을 시작하려면 사이드바에서 필수 CSV 파일 5종을 업로드해 주세요."
         )
-        st.info(
-            "**필요한 CSV 파일 목록:**\n"
-            + "\n".join(f"- `{name}`" for name in CSV_NAMES)
-        )
+        _show_csv_list()
         st.stop()
 
     # 2. 업로드 파일 변경 여부 확인 및 데이터 로딩
@@ -174,6 +175,7 @@ def main() -> None:
     failed_upload = st.session_state.get("upload_error")
     if failed_upload is not None and failed_upload[0] == upload_signature:
         st.error(failed_upload[1])
+        _show_csv_list()
 
         # 예상하지 못한 일시적 오류에 한해 동일 파일로 재시도할 수 있다.
         if len(failed_upload) > 2 and failed_upload[2]:
@@ -206,8 +208,17 @@ def main() -> None:
 
         except DataLoadError as error:
             message = f"데이터 적재 오류: {error}"
+            names = {file.name for file in uploaded_files}
+            missing = [name for name in CSV_NAMES if name not in names]
+            if "중복 업로드" in str(error):
+                message += " 중복된 파일은 하나씩만 남겨 주세요."
+            if missing:
+                message += f" {', '.join(missing)}를 추가로 업로드해 주세요."
+            elif "중복 업로드" not in str(error):
+                message += " 해당 CSV의 내용을 확인한 뒤 다시 업로드해 주세요."
             st.session_state.upload_error = (upload_signature, message, False)
             st.error(message)
+            _show_csv_list()
             st.stop()
 
         except Exception:
@@ -219,6 +230,7 @@ def main() -> None:
             )
             st.session_state.upload_error = (upload_signature, message, True)
             st.error(message)
+            _show_csv_list()
             if st.button("같은 파일로 다시 시도", key="retry_upload"):
                 st.session_state.pop("upload_error", None)
                 st.rerun()
