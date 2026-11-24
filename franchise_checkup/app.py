@@ -445,6 +445,11 @@ def main() -> None:
 
             st.dataframe(
                 payback_display,
+                column_config={
+                    "scenario": "시나리오",
+                    "monthly_net_profit": "월 순이익 (만원)",
+                    "payback_months": "원금 회수 기간 (개월)",
+                },
                 use_container_width=True,
                 hide_index=True,
             )
