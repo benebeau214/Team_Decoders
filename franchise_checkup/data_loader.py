@@ -3,6 +3,132 @@ import math
 from pandas.errors import EmptyDataError, ParserError
 import csv
 import math
+from io import StringIO
+from collections.abc import Iterable
+from typing import Any
+
+CSV_NAMES = (
+    "hq_financials.csv",
+    "franchise_disclosure.csv",
+    "region_sales.csv",
+    "audit_notes.csv",
+    "disclosure_clauses.csv",
+)
+
+REQUIRED_COLUMNS = {
+    "hq_financials.csv": [
+        "brand", "year", "total_liabilities", "total_equity", "capital_stock",
+        "revenue", "operating_income",
+    ],
+    "franchise_disclosure.csv": [
+        "brand", "year", "startup_cost", "avg_annual_sales", "stores_begin",
+        "contract_terminated", "contract_ended", "related_party", "relationship",
+        "transaction_type", "amount",
+    ],
+    "region_sales.csv": ["brand", "year", "region", "avg_annual_sales"],
+    "audit_notes.csv": ["brand", "year", "note_text"],
+    "disclosure_clauses.csv": ["brand", "year", "clause_text"],
+}
+
+
+class DataLoadError(Exception):
+    """업로드 CSV를 읽거나 검증할 수 없을 때 발생하는 예외."""
+
+
+def load_tables_from_uploads(
+    uploaded_files: Iterable[Any],
+) -> dict[str, pd.DataFrame]:
+    """Load and validate the required CSV tables from uploaded file objects."""
+    try:
+        files = list(uploaded_files)
+    except TypeError as error:
+        raise DataLoadError("업로드 파일 목록을 읽을 수 없습니다.") from error
+
+    files_by_name: dict[str, Any] = {}
+    duplicate_names: set[str] = set()
+    for uploaded_file in files:
+        name = getattr(uploaded_file, "name", None)
+        if not isinstance(name, str) or not name.strip():
+            raise DataLoadError("업로드 파일 이름을 확인할 수 없습니다.")
+        if name in files_by_name:
+            duplicate_names.add(name)
+            continue
+        files_by_name[name] = uploaded_file
+
+    if duplicate_names:
+        names = ", ".join(sorted(duplicate_names))
+        raise DataLoadError(f"{names} 파일이 중복 업로드되었습니다.")
+
+    missing_files = [name for name in CSV_NAMES if name not in files_by_name]
+    if missing_files:
+        raise DataLoadError(
+            f"필수 파일이 누락되었습니다: {', '.join(missing_files)}"
+        )
+
+    tables: dict[str, pd.DataFrame] = {}
+    for name in CSV_NAMES:
+        tables[name] = _load_uploaded_csv(
+            files_by_name[name],
+            name,
+            REQUIRED_COLUMNS[name],
+        )
+    return tables
+
+
+def _load_uploaded_csv(
+    uploaded_file: Any,
+    filename: str,
+    required_columns: list[str],
+) -> pd.DataFrame:
+    """Read one uploaded CSV with UTF-8 and CP949 fallback."""
+    try:
+        uploaded_file.seek(0)
+        raw_data = uploaded_file.read()
+    except (AttributeError, OSError, TypeError) as error:
+        raise DataLoadError(f"{filename} 파일을 읽을 수 없습니다.") from error
+
+    if not raw_data:
+        raise DataLoadError(f"{filename} 파일이 비어 있습니다.")
+    if isinstance(raw_data, str):
+        decoded = raw_data
+    elif isinstance(raw_data, bytes):
+        try:
+            decoded = raw_data.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                uploaded_file.seek(0)
+                raw_data = uploaded_file.read()
+                decoded = raw_data.decode("cp949")
+            except (AttributeError, OSError, TypeError, UnicodeDecodeError) as error:
+                raise DataLoadError(
+                    f"{filename} 파일을 UTF-8 또는 CP949로 읽을 수 없습니다."
+                ) from error
+    else:
+        raise DataLoadError(f"{filename} 파일 형식을 처리할 수 없습니다.")
+
+    if not decoded.strip():
+        raise DataLoadError(f"{filename} 파일이 비어 있습니다.")
+
+    try:
+        try:
+            dialect = csv.Sniffer().sniff(decoded[:4096], delimiters=",;")
+            delimiter = dialect.delimiter
+        except csv.Error:
+            delimiter = ","
+        table = pd.read_csv(StringIO(decoded), sep=delimiter)
+    except (EmptyDataError, ParserError, UnicodeDecodeError, csv.Error) as error:
+        raise DataLoadError(f"{filename} CSV 형식이 올바르지 않습니다.") from error
+
+    missing_columns = [
+        column for column in required_columns if column not in table.columns
+    ]
+    if missing_columns:
+        missing = "', '".join(missing_columns)
+        raise DataLoadError(
+            f"{filename}에 필수 열 '{missing}'가 없습니다."
+        )
+    return table
+
 
 def load_csv_table(filepath: str, required_cols: list[str]) -> pd.DataFrame:
     """Load a comma- or semicolon-delimited CSV and validate required columns."""
