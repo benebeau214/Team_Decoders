@@ -2,27 +2,25 @@ from __future__ import annotations
 
 import hashlib
 import html
+import logging
 import math
 from typing import Any
 
 import pandas as pd
 import streamlit as st
-from franchise_checkup.data_loader import validate_user_input
+from franchise_checkup.data_loader import DataLoadError, load_tables_from_uploads, validate_user_input
 from franchise_checkup.pipeline import (
     CSV_NAMES,
     PAYBACK_SCENARIOS,
-    PROJECT_ROOT,
     PipelineError,
     common_brands,
     list_regions,
-    load_tables,
     run_checkup,
 )
 
 
-@st.cache_data(show_spinner=False, ttl=300)
-def _load_tables(root: str) -> dict[str, pd.DataFrame]:
-    return load_tables(root)
+def _show_csv_list() -> None:
+    st.info("**필요한 CSV 파일 목록:**\n" + "\n".join(f"- `{name}`" for name in CSV_NAMES))
 
 
 def _format_value(value: Any, suffix: str = "") -> str:
@@ -656,12 +654,110 @@ def main() -> None:
     )
     st.markdown(_APP_CSS, unsafe_allow_html=True)
 
-    try:
-        tables = _load_tables(str(PROJECT_ROOT))
-    except (FileNotFoundError, OSError, ValueError, ImportError) as error:
-        st.error(f"데이터를 불러올 수 없습니다: {error}")
-        st.caption("필수 파일: " + ", ".join(CSV_NAMES))
-        return
+    # 1. CSV 파일 업로드
+    st.sidebar.header("데이터 업로드")
+    st.sidebar.markdown(
+        "분석에 필요한 CSV 파일 5종을 모두 업로드하세요."
+    )
+
+    uploaded_files = st.sidebar.file_uploader(
+        "분석용 CSV 파일 업로드",
+        type=["csv"],
+        accept_multiple_files=True,
+    )
+
+    if not uploaded_files:
+        for key in (
+            "tables",
+            "upload_signature",
+            "upload_error",
+            "checkup_result",
+            "checkup_input",
+            "selected_brand",
+            "selected_region",
+            "preview_table_name",
+        ):
+            st.session_state.pop(key, None)
+
+        st.warning(
+            "분석을 시작하려면 사이드바에서 필수 CSV 파일 5종을 업로드해 주세요."
+        )
+        _show_csv_list()
+        st.stop()
+
+    # 2. 업로드 파일 변경 여부 확인 및 데이터 로딩
+    upload_signature = tuple(sorted(
+        (file.name, hashlib.sha256(file.getvalue()).hexdigest()) for file in uploaded_files
+    ))
+
+    # 이미 실패한 파일 조합이면 불필요한 재로딩을 방지한다.
+    failed_upload = st.session_state.get("upload_error")
+    if failed_upload is not None and failed_upload[0] == upload_signature:
+        st.error(failed_upload[1])
+        _show_csv_list()
+
+        # 예상하지 못한 일시적 오류에 한해 동일 파일로 재시도할 수 있다.
+        if len(failed_upload) > 2 and failed_upload[2]:
+            if st.button("같은 파일로 다시 시도", key="retry_upload"):
+                st.session_state.pop("upload_error", None)
+                st.rerun()
+
+        st.stop()
+
+    cached_signature = st.session_state.get("upload_signature")
+
+    # 서명만 남고 테이블 캐시가 없는 세션 상태도 새 업로드처럼 복구한다.
+    if (
+        cached_signature != upload_signature
+        or st.session_state.get("tables") is None
+    ):
+        # 새 파일 조합을 불러오기 전에 이전 데이터 및 관련 위젯 상태를 초기화한다.
+        for key in ("selected_brand", "selected_region", "preview_table_name"):
+            st.session_state.pop(key, None)
+        st.session_state["tables"] = None
+        st.session_state["upload_signature"] = None
+        st.session_state["upload_error"] = None
+        st.session_state["checkup_result"] = None
+        st.session_state["checkup_input"] = None
+
+        try:
+            tables = load_tables_from_uploads(uploaded_files)
+            st.session_state.tables = tables
+            st.session_state.upload_signature = upload_signature
+
+        except DataLoadError as error:
+            message = f"데이터 적재 오류: {error}"
+            names = {file.name for file in uploaded_files}
+            missing = [name for name in CSV_NAMES if name not in names]
+            if "중복 업로드" in str(error):
+                message += " 중복된 파일은 하나씩만 남겨 주세요."
+            if missing:
+                message += f" {', '.join(missing)}를 추가로 업로드해 주세요."
+            elif "중복 업로드" not in str(error):
+                message += " 해당 CSV의 내용을 확인한 뒤 다시 업로드해 주세요."
+            st.session_state.upload_error = (upload_signature, message, False)
+            st.error(message)
+            _show_csv_list()
+            st.stop()
+
+        except Exception:
+            # 예상하지 못한 오류의 상세 내용은 화면에 노출하지 않고 로그에만 남긴다.
+            logging.getLogger(__name__).exception("Unexpected error while loading uploaded CSV files")
+            message = (
+                "예기치 못한 오류로 파일을 처리하지 못했습니다. "
+                "파일 형식을 확인한 뒤 다시 시도해 주세요."
+            )
+            st.session_state.upload_error = (upload_signature, message, True)
+            st.error(message)
+            _show_csv_list()
+            if st.button("같은 파일로 다시 시도", key="retry_upload"):
+                st.session_state.pop("upload_error", None)
+                st.rerun()
+            st.stop()
+
+    else:
+        # 동일한 파일이면 이전에 읽어 둔 DataFrame을 재사용한다.
+        tables = st.session_state["tables"]
 
     brands = common_brands(tables["hq_financials.csv"], tables["franchise_disclosure.csv"])
     regions = list_regions(tables["region_sales.csv"])
