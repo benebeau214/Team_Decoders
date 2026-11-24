@@ -1,3 +1,8 @@
+## 배포 앱
+
+[Streamlit 앱 열기](https://teamdecoders-jejavchdn3bbqbfmeazh7y.streamlit.app/)
+
+
 ## 테스트 결과
 
 
