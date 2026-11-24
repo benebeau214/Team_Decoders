@@ -422,6 +422,9 @@ def main() -> None:
                         payback_df,
                         x="scenario",
                         y="payback_months",
+                        x_label="시나리오",
+                        y_label="원금 회수 기간 (개월)",
+                        sort=False,
                     )
                     st.caption(
                         f"{UNCERTAIN_MONTHS}개월(5년)을 넘는 시나리오는 "
