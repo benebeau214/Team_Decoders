@@ -25,6 +25,7 @@ from franchise_checkup.pipeline import (
     list_regions,
     run_checkup,
 )
+from franchise_checkup.payback import UNCERTAIN_MONTHS
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,30 @@ def format_percent(value: SupportsFloat | str | None) -> str:
         return "확인 필요"
 
     return f"{numeric_value:,.1f}%"
+
+
+def format_signal_value(item, value) -> str:
+    """재무 신호 표의 '값' 열에 표시할 문자열을 만든다."""
+    if item == "자본잠식":
+        # value는 "정상" / "부분잠식" / "완전잠식" / "NA" 중 하나
+        if not value or value == "NA":
+            return "확인 필요"
+        return value
+    # 나머지(부채비율·영업이익률·계약 해지율)는 비율 숫자
+    return format_percent(value)
+
+
+def describe_payback(months) -> str:
+    """회수 기간(개월)을 사용자가 읽을 판정 문구로 바꾼다."""
+    if months is None or math.isnan(months):
+        return "회수 불가 (월 순이익 0 이하)"
+    if months > UNCERTAIN_MONTHS:
+        return f"회수 불확실 ({UNCERTAIN_MONTHS}개월 초과)"
+    return f"{UNCERTAIN_MONTHS}개월 이내"
+
+
+def _show_csv_list() -> None:
+    st.info("**필요한 CSV 파일 목록:**\n" + "\n".join(f"- `{name}`" for name in CSV_NAMES))
 
 
 def main() -> None:
@@ -140,10 +165,7 @@ def main() -> None:
         st.warning(
             "분석을 시작하려면 사이드바에서 필수 CSV 파일 5종을 업로드해 주세요."
         )
-        st.info(
-            "**필요한 CSV 파일 목록:**\n"
-            + "\n".join(f"- `{name}`" for name in CSV_NAMES)
-        )
+        _show_csv_list()
         st.stop()
 
     # 2. 업로드 파일 변경 여부 확인 및 데이터 로딩
@@ -153,6 +175,7 @@ def main() -> None:
     failed_upload = st.session_state.get("upload_error")
     if failed_upload is not None and failed_upload[0] == upload_signature:
         st.error(failed_upload[1])
+        _show_csv_list()
 
         # 예상하지 못한 일시적 오류에 한해 동일 파일로 재시도할 수 있다.
         if len(failed_upload) > 2 and failed_upload[2]:
@@ -185,8 +208,21 @@ def main() -> None:
 
         except DataLoadError as error:
             message = f"데이터 적재 오류: {error}"
+            names = {file.name for file in uploaded_files}
+            missing = [name for name in CSV_NAMES if name not in names]
+            if "중복 업로드" in str(error):
+                message += " 중복된 파일은 하나씩만 남겨 주세요."
+            if missing:
+                upload_hint = f"{', '.join(missing)}를 추가로 업로드해 주세요."
+                if str(error).startswith("필수 파일이 누락되었습니다:"):
+                    message = f"데이터 적재 오류: {upload_hint}"
+                else:
+                    message += f" {upload_hint}"
+            elif "중복 업로드" not in str(error):
+                message += " 해당 CSV의 내용을 확인한 뒤 다시 업로드해 주세요."
             st.session_state.upload_error = (upload_signature, message, False)
             st.error(message)
+            _show_csv_list()
             st.stop()
 
         except Exception:
@@ -198,6 +234,7 @@ def main() -> None:
             )
             st.session_state.upload_error = (upload_signature, message, True)
             st.error(message)
+            _show_csv_list()
             if st.button("같은 파일로 다시 시도", key="retry_upload"):
                 st.session_state.pop("upload_error", None)
                 st.rerun()
@@ -354,6 +391,7 @@ def main() -> None:
         value=format_percent(debt_item.get("value")),
         delta=debt_level or "확인 필요",
         delta_color="inverse" if debt_level in ["주의", "위험"] else "normal",
+        delta_arrow="off",
     )
 
     margin_level = margin_item.get("level")
@@ -362,6 +400,7 @@ def main() -> None:
         value=format_percent(margin_item.get("value")),
         delta=margin_level or "확인 필요",
         delta_color="inverse" if margin_level in ["주의", "위험"] else "normal",
+        delta_arrow="off",
     )
 
     term_level = term_item.get("level")
@@ -370,6 +409,7 @@ def main() -> None:
         value=format_percent(term_item.get("value")),
         delta=term_level or "확인 필요",
         delta_color="inverse" if term_level in ["주의", "위험"] else "normal",
+        delta_arrow="off",
     )
 
     col4.metric(
@@ -401,14 +441,37 @@ def main() -> None:
                         payback_df,
                         x="scenario",
                         y="payback_months",
+                        x_label="시나리오",
+                        y_label="원금 회수 기간 (개월)",
+                        sort=False,
+                    )
+                    st.caption(
+                        f"{UNCERTAIN_MONTHS}개월(5년)을 넘는 시나리오는 "
+                        "투자금 회수가 불확실한 것으로 봅니다."
                     )
                 else:
                     st.info("산출 가능한 유효한 회수 기간 데이터가 없습니다.")
             else:
                 st.warning("차트에 필요한 데이터 컬럼이 없습니다.")
 
+            # 체크박스뿐인 uncertain 열 대신 판정 문구 열을 보여준다.
+            payback_display = payback_df.drop(columns="uncertain", errors="ignore")
+            if "payback_months" in payback_display.columns:
+                payback_display = payback_display.assign(
+                    **{
+                        "회수 판단": payback_display["payback_months"].map(
+                            describe_payback
+                        )
+                    }
+                )
+
             st.dataframe(
-                payback_df,
+                payback_display,
+                column_config={
+                    "scenario": "시나리오",
+                    "monthly_net_profit": "월 순이익 (만원)",
+                    "payback_months": "원금 회수 기간 (개월)",
+                },
                 use_container_width=True,
                 hide_index=True,
             )
@@ -419,12 +482,16 @@ def main() -> None:
         st.markdown("### 본사 재무 및 계약 위험 신호 판정")
 
         if signals:
+            signal_rows = [
+                {**signal, "value": format_signal_value(signal["item"], signal["value"])}
+                for signal in signals
+            ]
             st.dataframe(
-                signals,
+                signal_rows,
                 column_config={
                     "item": st.column_config.TextColumn("항목"),
                     "level": st.column_config.TextColumn("위험 수준"),
-                    "value": st.column_config.NumberColumn("값"),
+                    "value": st.column_config.TextColumn("값"),
                     "reason": st.column_config.TextColumn(
                         "판정 근거",
                         width="large",

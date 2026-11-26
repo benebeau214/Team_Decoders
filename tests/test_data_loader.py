@@ -209,6 +209,19 @@ def test_load_tables_from_uploads_duplicate_file_raises_data_load_error():
         load_tables_from_uploads(files)
 
 
+def test_load_tables_from_uploads_reports_all_duplicate_names_once():
+    files = _complete_uploads()
+    for name in ("region_sales.csv", "audit_notes.csv", "region_sales.csv"):
+        files.append(_uploaded_csv(name))
+
+    with pytest.raises(DataLoadError) as error:
+        load_tables_from_uploads(files)
+
+    message = str(error.value)
+    assert message.count("audit_notes.csv") == 1
+    assert message.count("region_sales.csv") == 1
+
+
 def test_load_tables_from_uploads_missing_column_names_file_and_column():
     missing_column = REQUIRED_COLUMNS["hq_financials.csv"][0]
     files = [
