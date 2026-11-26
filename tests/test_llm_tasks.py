@@ -265,7 +265,8 @@ def test_fallback_report_propagates_reason_formatting_exception():
         ),
     ],
 )
-def test_write_report_with_shared_mock(user_type, expected_checklist):
+def test_write_report_with_shared_mock(monkeypatch, user_type, expected_checklist):
+    monkeypatch.setenv("USE_MOCK", "true")
     result = write_report(
         signals=[
             {
